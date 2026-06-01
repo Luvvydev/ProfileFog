@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "NoiseProfile",
+  "name": "ProfileFog",
   "version": "1.5.0",
   "description": "Chrome MV3 extension for controlled browsing noise, tracker learning, seed rules, page controls, and privacy settings.",
   "permissions": [
@@ -16,7 +16,7 @@
     "service_worker": "service_worker.js"
   },
   "action": {
-    "default_title": "NoiseProfile",
+    "default_title": "ProfileFog",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",

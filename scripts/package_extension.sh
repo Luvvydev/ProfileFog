@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="${ROOT}/dist"
-OUT_FILE="${OUT_DIR}/NoiseProfile.zip"
+OUT_FILE="${OUT_DIR}/ProfileFog.zip"
 
 mkdir -p "$OUT_DIR"
 rm -f "$OUT_FILE"

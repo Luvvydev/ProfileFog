@@ -1430,7 +1430,7 @@ async function applySeedTrackerData(settings = null) {
 async function buildExportData() {
   const data = await chrome.storage.local.get(["settings", LEARNED_TRACKERS_KEY, SITE_RULES_KEY, PAUSED_SITES_KEY, "trackerStats", SEED_VERSION_KEY]);
   return {
-    name: "NoiseProfile export",
+    name: "ProfileFog export",
     version: 1,
     exportedAt: new Date().toISOString(),
     settings: normalizeSettings(data.settings || {}),
@@ -1651,7 +1651,7 @@ function clearPrivacyOverride(control) {
 }
 
 async function setIconState(enabled) {
-  const title = enabled ? "NoiseProfile: on" : "NoiseProfile: off";
+  const title = enabled ? "ProfileFog: on" : "ProfileFog: off";
   await chrome.action.setTitle({ title });
   await chrome.action.setBadgeText({ text: enabled ? "ON" : "" });
   await chrome.action.setBadgeBackgroundColor({ color: "#6ae28f" });
