@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="icons/Logo.png" alt="ProfileFog" width="100%">
+</p>
+
 # ProfileFog
 
 **Blur the profile they think they have on you.**
