@@ -1,6 +1,10 @@
 const ALARM_TICK = "noiseTick";
 const CLOSE_PREFIX = "closeTab:";
 const MAX_LOGS = 80;
+const REQUEST_LOGS_KEY = "requestLog";
+const MAX_REQUEST_LOG_EVENTS = 300;
+const REQUEST_LOG_FLUSH_MS = 2000;
+const MAX_REQUEST_LOG_BUFFER = 20;
 const MAX_RECENT_OPENED = 30;
 const TRACKER_RULESET_ID = "tracker_rules";
 const CLEANUP_RULESET_ID = "cleanup_rules";
@@ -34,9 +38,13 @@ const LEARN_MIN_REQUESTS_TO_BLOCK = 8;
 const LEARNED_RESOURCE_TYPES = ["script", "image", "xmlhttprequest", "ping", "media", "font", "stylesheet", "sub_frame", "websocket", "webtransport", "other"];
 const LEARN_EVENT_DEDUPE_MS = 10 * 60 * 1000;
 const MAX_RECENT_LEARN_EVENTS = 1000;
+const LEARNED_STALE_OBSERVED_MS = 14 * 24 * 60 * 60 * 1000;
+const LEARNED_STALE_LOW_SIGNAL_MS = 45 * 24 * 60 * 60 * 1000;
 let cachedSettings = null;
 let cachedSettingsAt = 0;
 let recentLearnEvents = new Map();
+let pendingRequestLogEvents = [];
+let requestLogFlushTimer = null;
 const OBSERVED_RESOURCE_TYPES = new Set(["sub_frame", "stylesheet", "script", "image", "font", "object", "xmlhttprequest", "ping", "csp_report", "media", "websocket", "webtransport", "webbundle", "other"]);
 
 const DEFAULT_SETTINGS = {
@@ -420,6 +428,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ ok: true, state: await getPublicState() });
         return;
       }
+      if (message?.type === "clearRequestLog") {
+        pendingRequestLogEvents = [];
+        if (requestLogFlushTimer) clearTimeout(requestLogFlushTimer);
+        requestLogFlushTimer = null;
+        await chrome.storage.local.set({ [REQUEST_LOGS_KEY]: [] });
+        sendResponse({ ok: true, state: await getPublicState() });
+        return;
+      }
       if (message?.type === "clearTrackerStats") {
         await chrome.storage.local.set({ trackerStats: emptyTrackerStats() });
         sendResponse({ ok: true, state: await getPublicState() });
@@ -520,7 +536,7 @@ async function saveSettings(patch) {
 async function getPublicState() {
   const [settings, data, alarm, enabledRulesets, currentPage] = await Promise.all([
     getSettings(),
-    chrome.storage.local.get(["logs", "hourlyRuns", "recentOpened", "trackerStats", LEARNED_TRACKERS_KEY, PAGE_TRACKERS_KEY, SITE_RULES_KEY, PAUSED_SITES_KEY]),
+    chrome.storage.local.get(["logs", REQUEST_LOGS_KEY, "hourlyRuns", "recentOpened", "trackerStats", LEARNED_TRACKERS_KEY, PAGE_TRACKERS_KEY, SITE_RULES_KEY, PAUSED_SITES_KEY]),
     chrome.alarms.get(ALARM_TICK),
     getEnabledRulesets(),
     getCurrentPageInfo()
@@ -531,6 +547,8 @@ async function getPublicState() {
   return {
     settings,
     logs: data.logs || [],
+    requestLog: normalizeRequestLog(data[REQUEST_LOGS_KEY]),
+    requestLogLimit: MAX_REQUEST_LOG_EVENTS,
     hourlyRuns: data.hourlyRuns || [],
     recentOpened: data.recentOpened || [],
     trackerStats: normalizeTrackerStats(data.trackerStats),
@@ -700,6 +718,65 @@ async function addLog(entry) {
   await chrome.storage.local.set({ logs: logs.slice(0, MAX_LOGS) });
 }
 
+function normalizeRequestLog(raw) {
+  return Array.isArray(raw) ? raw.slice(0, MAX_REQUEST_LOG_EVENTS).map(normalizeRequestLogEntry).filter(Boolean) : [];
+}
+
+function normalizeRequestLogEntry(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  return {
+    at: Number(raw.at) || Date.now(),
+    action: String(raw.action || "observed").slice(0, 32),
+    reason: String(raw.reason || "").slice(0, 80),
+    domain: normalizeHost(raw.domain || ""),
+    firstParty: normalizeHost(raw.firstParty || ""),
+    type: String(raw.type || "other").slice(0, 32),
+    source: String(raw.source || "observer").slice(0, 32),
+    state: String(raw.state || "").slice(0, 32),
+    signals: raw.signals && typeof raw.signals === "object" ? {
+      cookie: Boolean(raw.signals.cookie),
+      referer: Boolean(raw.signals.referer),
+      setCookie: Boolean(raw.signals.setCookie)
+    } : {},
+    url: sanitizeLoggedUrl(raw.url || "")
+  };
+}
+
+function sanitizeLoggedUrl(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    url.hash = "";
+    return `${url.origin}${url.pathname}`.slice(0, 220);
+  } catch (_) {
+    return "";
+  }
+}
+
+function queueRequestLog(entry) {
+  const normalized = normalizeRequestLogEntry({ at: Date.now(), ...entry });
+  if (!normalized || !normalized.domain) return;
+  pendingRequestLogEvents.unshift(normalized);
+  pendingRequestLogEvents = pendingRequestLogEvents.slice(0, MAX_REQUEST_LOG_EVENTS);
+  if (pendingRequestLogEvents.length >= MAX_REQUEST_LOG_BUFFER) {
+    flushRequestLog().catch(() => {});
+    return;
+  }
+  if (!requestLogFlushTimer) {
+    requestLogFlushTimer = setTimeout(() => {
+      requestLogFlushTimer = null;
+      flushRequestLog().catch(() => {});
+    }, REQUEST_LOG_FLUSH_MS);
+  }
+}
+
+async function flushRequestLog() {
+  if (!pendingRequestLogEvents.length) return;
+  const batch = pendingRequestLogEvents.splice(0, MAX_REQUEST_LOG_BUFFER);
+  const data = await chrome.storage.local.get([REQUEST_LOGS_KEY]);
+  const existing = normalizeRequestLog(data[REQUEST_LOGS_KEY]);
+  await chrome.storage.local.set({ [REQUEST_LOGS_KEY]: batch.concat(existing).slice(0, MAX_REQUEST_LOG_EVENTS) });
+}
+
 async function closeNoiseTab(tabId) {
   try {
     await chrome.tabs.remove(tabId);
@@ -754,21 +831,35 @@ async function getEnabledRulesets() {
 }
 
 async function recordRuleMatch(info) {
-  const rulesetId = info?.rule?.rulesetId;
-  if (![TRACKER_RULESET_ID, CLEANUP_RULESET_ID].includes(rulesetId)) return;
+  const rulesetId = info?.rule?.rulesetId || "";
+  const ruleId = Number(info?.rule?.ruleId ?? info?.rule?.id ?? 0);
+  const action = getRuleMatchAction(rulesetId, ruleId);
+  if (!action) return;
 
   const requestUrl = info?.request?.url || "";
   const domain = extractHostname(requestUrl);
+  const firstParty = extractHostname(info?.request?.initiator || "") || "";
+
+  queueRequestLog({
+    source: "dnr",
+    action,
+    reason: rulesetId || `dynamic_rule_${ruleId}`,
+    domain,
+    firstParty,
+    type: info?.request?.type || "other",
+    url: requestUrl
+  });
+
   const current = normalizeTrackerStats((await chrome.storage.local.get(["trackerStats"])).trackerStats);
   current.lastUpdated = Date.now();
 
-  if (rulesetId === TRACKER_RULESET_ID) {
+  if (action === "blocked") {
     current.totalBlocked += 1;
     current.byDomain[domain] = (current.byDomain[domain] || 0) + 1;
     current.recent.unshift({ at: Date.now(), type: "blocked", domain, url: requestUrl });
   }
 
-  if (rulesetId === CLEANUP_RULESET_ID) {
+  if (action === "cleaned") {
     current.totalCleaned += 1;
     current.recent.unshift({ at: Date.now(), type: "cleaned", domain, url: requestUrl });
   }
@@ -777,6 +868,16 @@ async function recordRuleMatch(info) {
   current.byDomain = trimDomainCounts(current.byDomain);
   await chrome.storage.local.set({ trackerStats: current });
 }
+
+function getRuleMatchAction(rulesetId, ruleId) {
+  if (rulesetId === TRACKER_RULESET_ID) return "blocked";
+  if (rulesetId === CLEANUP_RULESET_ID) return "cleaned";
+  if (ruleId >= LEARNED_BLOCK_RULE_ID_BASE && ruleId < LEARNED_COOKIE_RULE_ID_BASE) return "blocked";
+  if (ruleId >= LEARNED_COOKIE_RULE_ID_BASE && ruleId < SITE_ALLOW_RULE_ID_BASE) return "cookie_mode";
+  if (ruleId >= SITE_ALLOW_RULE_ID_BASE && ruleId < LEARNED_RULE_ID_LIMIT) return "allowed";
+  return "";
+}
+
 
 function emptyTrackerStats() {
   return {
@@ -836,14 +937,32 @@ async function observeThirdPartyRequest(details, signals = {}) {
   if (!firstPartyRoot || !requestRoot || firstPartyRoot === requestRoot) return;
 
   const pausedSites = normalizePausedSites((await chrome.storage.local.get([PAUSED_SITES_KEY]))[PAUSED_SITES_KEY]);
-  if (pausedSites[firstPartyRoot]) return;
+  if (pausedSites[firstPartyRoot]) {
+    queueRequestLog({ source: "observer", action: "paused", reason: "site_pause", domain: requestHost, firstParty: firstPartyRoot, type: details.type, url: details.url });
+    return;
+  }
 
   const strongSignal = Boolean(signals.cookieHeader || signals.setCookieHeader || signals.refererHeader);
   await recordPageTracker(firstPartyRoot, requestHost, details, signals);
-  if (isRecentLearnEvent(requestHost, firstPartyRoot, signals) && !strongSignal) return;
 
   const siteRules = normalizeSiteRules((await chrome.storage.local.get([SITE_RULES_KEY]))[SITE_RULES_KEY]);
-  if (siteRules.allow?.[firstPartyRoot]?.[requestHost]) return;
+  if (siteRules.allow?.[firstPartyRoot]?.[requestHost]) {
+    queueRequestLog({ source: "observer", action: "allowed", reason: "site_allow", domain: requestHost, firstParty: firstPartyRoot, type: details.type, url: details.url });
+    return;
+  }
+
+  queueRequestLog({
+    source: "observer",
+    action: "observed",
+    reason: strongSignal ? "third_party_with_headers" : "third_party_request",
+    domain: requestHost,
+    firstParty: firstPartyRoot,
+    type: details.type,
+    url: details.url,
+    signals: { cookie: signals.cookieHeader, referer: signals.refererHeader, setCookie: signals.setCookieHeader }
+  });
+
+  if (isRecentLearnEvent(requestHost, firstPartyRoot, signals) && !strongSignal) return;
 
   const data = await getLearnedTrackerData();
   const domain = requestHost;
@@ -872,8 +991,21 @@ async function observeThirdPartyRequest(details, signals = {}) {
   data.domains[domain] = item;
   data.totalObservedRequests += 1;
   data.lastUpdated = now;
-  data.domains = trimLearnedDomains(data.domains);
+  data.domains = pruneLearnedDomains(trimLearnedDomains(data.domains));
   await chrome.storage.local.set({ [LEARNED_TRACKERS_KEY]: data });
+
+  if (item.state !== previousState) {
+    queueRequestLog({
+      source: "learner",
+      action: item.state,
+      reason: "state_change",
+      domain,
+      firstParty: firstPartyRoot,
+      type: details.type,
+      state: item.state,
+      url: details.url
+    });
+  }
 
   if (item.state !== previousState && ["blocked", "manual_blocked", "cookie_blocked", "manual_cookie_blocked"].includes(item.state)) {
     await addLog({ type: "tracker", label: "Learned tracker rule updated", detail: `${domain} across ${item.firstPartyCount} sites` });
@@ -1041,7 +1173,7 @@ function normalizeLearnedTrackerData(raw) {
     cleanDomains[domain] = normalizeLearnedTrackerItem(item, domain);
   }
 
-  data.domains = cleanDomains;
+  data.domains = pruneLearnedDomains(cleanDomains);
   return data;
 }
 
@@ -1142,6 +1274,39 @@ function trimLearnedDomains(domains) {
       .sort((a, b) => learnedStateWeight(b[1].state) - learnedStateWeight(a[1].state) || Number(b[1].lastSeen || 0) - Number(a[1].lastSeen || 0))
       .slice(0, MAX_LEARNED_DOMAINS)
   );
+}
+
+function pruneLearnedDomains(domains) {
+  const now = Date.now();
+  const kept = [];
+
+  for (const [domain, rawItem] of Object.entries(domains || {})) {
+    const item = normalizeLearnedTrackerItem(rawItem, domain);
+    if (shouldPruneLearnedTracker(item, now)) continue;
+    kept.push([domain, item]);
+  }
+
+  return Object.fromEntries(
+    kept
+      .sort((a, b) => learnedStateWeight(b[1].state) - learnedStateWeight(a[1].state) || Number(b[1].lastSeen || 0) - Number(a[1].lastSeen || 0))
+      .slice(0, MAX_LEARNED_DOMAINS)
+  );
+}
+
+function shouldPruneLearnedTracker(item, now = Date.now()) {
+  if (!item || !item.domain) return true;
+  if (isManualState(item.state) || item.seeded) return false;
+  if (["blocked", "ready", "cookie_blocked"].includes(item.state)) return false;
+
+  const lastSeen = Number(item.lastSeen || item.firstSeen || 0);
+  if (!lastSeen) return false;
+  const age = now - lastSeen;
+  const h = normalizeHeuristics(item.heuristics);
+  const strongSignals = h.thirdPartyCookieRequests + h.thirdPartySetCookieResponses + h.thirdPartyRefererRequests + h.seedMatch;
+
+  if (item.state === "observed" && item.firstPartyCount <= 1 && strongSignals === 0 && age > LEARNED_STALE_OBSERVED_MS) return true;
+  if (["observed", "suspicious"].includes(item.state) && item.heuristicScore < 4 && strongSignals === 0 && age > LEARNED_STALE_LOW_SIGNAL_MS) return true;
+  return false;
 }
 
 function learnedStateWeight(state) {
@@ -1422,7 +1587,7 @@ async function applySeedTrackerData(settings = null) {
   }
 
   data.lastUpdated = now;
-  data.domains = trimLearnedDomains(data.domains);
+  data.domains = pruneLearnedDomains(trimLearnedDomains(data.domains));
   await chrome.storage.local.set({ [LEARNED_TRACKERS_KEY]: data, [SEED_VERSION_KEY]: SEED_TRACKER_VERSION });
 }
 

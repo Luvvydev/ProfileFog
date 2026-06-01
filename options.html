@@ -27,6 +27,7 @@
       <div class="card"><strong id="readyCount">0</strong><span>Ready for review</span></div>
       <div class="card"><strong id="blockedCount">0</strong><span>Blocked</span></div>
       <div class="card"><strong id="cookieCount">0</strong><span>Cookie mode</span></div>
+      <div class="card"><strong id="requestLogCount">0</strong><span>Request log</span></div>
     </section>
 
     <section class="panel">
@@ -82,6 +83,17 @@
         <button id="clearLearnedTrackers" class="danger" type="button">Clear learned</button>
       </div>
       <div id="learnedList" class="tracker-list"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <h2>Live request log</h2>
+          <p>Recent third party requests and rule actions. Kept to the latest 300 events.</p>
+        </div>
+        <button id="clearRequestLog" class="danger" type="button">Clear log</button>
+      </div>
+      <div id="requestLogList" class="request-log-list"></div>
     </section>
 
     <section class="panel">

@@ -13,6 +13,11 @@ init();
 async function init() {
   document.getElementById("saveSettings").addEventListener("click", saveSettings);
   document.getElementById("refreshState").addEventListener("click", refresh);
+  document.getElementById("clearRequestLog").addEventListener("click", async () => {
+    const result = await send({ type: "clearRequestLog" });
+    render(result.state);
+    setStatus("Request log cleared.");
+  });
   document.getElementById("clearLearnedTrackers").addEventListener("click", async () => {
     const result = await send({ type: "clearLearnedTrackers" });
     render(result.state);
@@ -46,8 +51,60 @@ function render(state) {
   document.getElementById("readyCount").textContent = String(learned.readyCount || 0);
   document.getElementById("blockedCount").textContent = String(learned.blockedCount || 0);
   document.getElementById("cookieCount").textContent = String(learned.cookieBlockedCount || 0);
+  document.getElementById("requestLogCount").textContent = String((state.requestLog || []).length);
 
   renderLearned(learned.recent || []);
+  renderRequestLog(state.requestLog || [], state.requestLogLimit || 300);
+}
+
+function renderRequestLog(items, limit) {
+  const root = document.getElementById("requestLogList");
+  root.innerHTML = "";
+
+  if (!items.length) {
+    const empty = document.createElement("p");
+    empty.textContent = "Request events will appear as pages load and rules match.";
+    root.appendChild(empty);
+    return;
+  }
+
+  const note = document.createElement("p");
+  note.textContent = `Showing ${items.length} of ${limit} retained events.`;
+  root.appendChild(note);
+
+  for (const item of items.slice(0, 80)) {
+    const row = document.createElement("div");
+    row.className = `request-row ${item.action || "observed"}`;
+
+    const main = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = item.domain || "unknown";
+
+    const meta = document.createElement("span");
+    const parts = [
+      item.action || "observed",
+      item.type || "other",
+      item.firstParty ? `on ${item.firstParty}` : "",
+      item.reason || "",
+      formatTime(item.at)
+    ].filter(Boolean);
+    meta.textContent = parts.join(" · ");
+
+    main.append(title, meta);
+
+    const pill = document.createElement("span");
+    pill.className = "request-pill";
+    pill.textContent = item.source || "observer";
+
+    row.append(main, pill);
+    root.appendChild(row);
+  }
+}
+
+function formatTime(value) {
+  const ts = Number(value) || 0;
+  if (!ts) return "";
+  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
 function renderLearned(items) {
