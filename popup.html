@@ -1,0 +1,301 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>NoiseProfile</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <header class="app-header">
+      <div class="brand-block">
+        <div class="brand-mark">NP</div>
+        <div>
+          <h1>NoiseProfile</h1>
+          <p id="subtitle">Noise, blocking, cleanup</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="openOptions" class="icon-button" type="button" title="Options">Settings</button>
+        <label class="switch" title="Enable NoiseProfile">
+          <input id="enabled" type="checkbox">
+          <span></span>
+        </label>
+      </div>
+    </header>
+
+    <section class="hero-card">
+      <div class="hero-topline">
+        <div>
+          <strong id="statusText">Loading</strong>
+          <p id="nextRun">Next run: ready when enabled</p>
+        </div>
+        <button id="runNow" class="primary-action" type="button">Run once</button>
+      </div>
+
+      <div class="site-strip">
+        <div class="site-copy">
+          <span class="eyebrow">Current site</span>
+          <strong id="currentSiteName">Loading</strong>
+          <span id="currentSiteMeta">Trackers will appear as the page loads.</span>
+        </div>
+        <button id="pauseSite" class="site-action" type="button">Pause site</button>
+      </div>
+
+      <div class="metric-row compact">
+        <div>
+          <strong id="blockedTotal">0</strong>
+          <span>Blocked</span>
+        </div>
+        <div>
+          <strong id="cleanedTotal">0</strong>
+          <span>Cleaned</span>
+        </div>
+        <div>
+          <strong id="learnedObservedTotal">0</strong>
+          <span>Observed</span>
+        </div>
+        <div>
+          <strong id="learnedReadyTotal">0</strong>
+          <span>Ready</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel current-panel">
+      <div class="section-head tight">
+        <h2>Page controls</h2>
+        <span id="currentPageInfo" class="inline-hint">Loading page state</span>
+      </div>
+      <div id="currentPageTrackers" class="tracker-list"></div>
+    </section>
+
+    <details class="drawer" open>
+      <summary>
+        <span>Protection</span>
+        <small>Core privacy tools</small>
+      </summary>
+      <div class="drawer-body switch-list">
+        <label class="setting-row">
+          <span>
+            <strong>Chrome privacy controls</strong>
+            <small>Prediction, link auditing, ad topics</small>
+          </span>
+          <input id="privacyHardening" type="checkbox">
+        </label>
+        <label class="setting-row">
+          <span>
+            <strong>Tracker blocker</strong>
+            <small>Local third party tracker rules</small>
+          </span>
+          <input id="trackerBlocker" type="checkbox">
+        </label>
+        <label class="setting-row">
+          <span>
+            <strong>Link cleanup</strong>
+            <small>Campaign and click ID cleanup</small>
+          </span>
+          <input id="trackingParameterCleanup" type="checkbox">
+        </label>
+        <label class="setting-row">
+          <span>
+            <strong>Learning observer</strong>
+            <small>Track repeated third party domains</small>
+          </span>
+          <input id="trackerLearning" type="checkbox">
+        </label>
+        <label class="setting-row">
+          <span>
+            <strong>Learned blocking</strong>
+            <small>Promote mature learned domains</small>
+          </span>
+          <input id="autoBlockLearnedTrackers" type="checkbox">
+        </label>
+        <label class="setting-row">
+          <span>
+            <strong>Cookie block mode</strong>
+            <small>Strip cookies and referers first</small>
+          </span>
+          <input id="cookieBlockLearnedTrackers" type="checkbox">
+        </label>
+        <label class="setting-row">
+          <span>
+            <strong>Review mode</strong>
+            <small>Queue mature domains for review</small>
+          </span>
+          <input id="learningReviewMode" type="checkbox">
+        </label>
+        <label class="setting-row">
+          <span>
+            <strong>Seed tracker data</strong>
+            <small>Start with known tracker domains</small>
+          </span>
+          <input id="seedKnownTrackers" type="checkbox">
+        </label>
+        <label class="setting-row">
+          <span>
+            <strong>Cookie heuristics</strong>
+            <small>Score third party cookie and referer behavior</small>
+          </span>
+          <input id="headerHeuristics" type="checkbox">
+        </label>
+        <label class="setting-row">
+          <span>
+            <strong>Breakage protection</strong>
+            <small>Allow common auth, captcha, payment, and CDN services</small>
+          </span>
+          <input id="breakageProtection" type="checkbox">
+        </label>
+        <label class="setting-row">
+          <span>
+            <strong>Recent target rotation</strong>
+            <small>Keep generated visits varied</small>
+          </span>
+          <input id="avoidRecentTargets" type="checkbox">
+        </label>
+      </div>
+    </details>
+
+    <details class="drawer">
+      <summary>
+        <span>Noise settings</span>
+        <small>Timing and behavior</small>
+      </summary>
+      <div class="drawer-body">
+        <div class="grid two">
+          <label>
+            Mode
+            <select id="mode">
+              <option value="mixed">Mixed</option>
+              <option value="search">Search only</option>
+              <option value="browse">Browse only</option>
+            </select>
+          </label>
+          <label>
+            Search engine
+            <select id="searchEngine">
+              <option value="duckduckgo">DuckDuckGo</option>
+              <option value="google">Google</option>
+              <option value="bing">Bing</option>
+              <option value="brave">Brave</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="grid three">
+          <label>
+            Max per hour
+            <input id="maxPerHour" type="number" min="1" max="20">
+          </label>
+          <label>
+            Min delay
+            <input id="minDelayMinutes" type="number" min="1" max="180">
+          </label>
+          <label>
+            Max delay
+            <input id="maxDelayMinutes" type="number" min="1" max="240">
+          </label>
+        </div>
+
+        <div class="grid three">
+          <label>
+            Dwell seconds
+            <input id="dwellSeconds" type="number" min="5" max="900">
+          </label>
+          <label class="check-pill">
+            <input id="closeTabs" type="checkbox">
+            Auto close
+          </label>
+          <label class="check-pill">
+            <input id="openActive" type="checkbox">
+            Open active
+          </label>
+        </div>
+
+        <label class="setting-row inline-only">
+          <span>
+            <strong>Sensitive tab pause</strong>
+            <small>Banking, checkout, login, mail, payment pages</small>
+          </span>
+          <input id="pauseOnSensitiveTab" type="checkbox">
+        </label>
+      </div>
+    </details>
+
+    <details class="drawer">
+      <summary>
+        <span>Topics</span>
+        <small>Noise profile mix</small>
+      </summary>
+      <div class="drawer-body">
+        <div id="topics" class="topics"></div>
+      </div>
+    </details>
+
+    <details class="drawer">
+      <summary>
+        <span>Learned trackers</span>
+        <small>Review and overrides</small>
+      </summary>
+      <div class="drawer-body">
+        <div class="metric-row learned-metrics">
+          <div>
+            <strong id="learnedSuspiciousTotal">0</strong>
+            <span>Suspicious</span>
+          </div>
+          <div>
+            <strong id="learnedBlockedTotal">0</strong>
+            <span>Blocked</span>
+          </div>
+          <div>
+            <strong id="learnedCookieTotal">0</strong>
+            <span>Cookie</span>
+          </div>
+        </div>
+        <div class="section-head tight subhead">
+          <span class="inline-hint">Recent learned domains</span>
+          <button id="clearLearnedTrackers" class="plain" type="button">Clear</button>
+        </div>
+        <div id="learnedTrackers" class="tracker-list"></div>
+      </div>
+    </details>
+
+    <details class="drawer">
+      <summary>
+        <span>Activity</span>
+        <small>Rules and log</small>
+      </summary>
+      <div class="drawer-body">
+        <div class="section-head tight subhead">
+          <span class="inline-hint">Tracker rules</span>
+          <button id="clearTrackerStats" class="plain" type="button">Clear</button>
+        </div>
+        <div id="trackerStats" class="tracker-stats"></div>
+
+        <div class="section-head tight subhead with-gap">
+          <span class="inline-hint">Generated activity</span>
+          <button id="clearLogs" class="plain" type="button">Clear</button>
+        </div>
+        <div id="logs" class="logs"></div>
+      </div>
+    </details>
+
+    <details class="drawer">
+      <summary>
+        <span>Backup</span>
+        <small>Export and import</small>
+      </summary>
+      <div class="drawer-body backup-row">
+        <button id="exportData" type="button">Export</button>
+        <button id="importData" type="button">Import</button>
+        <input id="importFile" type="file" accept="application/json" hidden>
+      </div>
+    </details>
+
+    <footer>
+      Local controls. Learned rules. Browser privacy preferences.
+    </footer>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

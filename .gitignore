@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+
+# Build output
+dist/
+*.zip
+
+# Local editor noise
+.vscode/
+.idea/
+
+# Chrome generated extension metadata
+_metadata/

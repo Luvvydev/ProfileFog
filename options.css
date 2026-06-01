@@ -1,0 +1,267 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #0b0d12;
+  color: #f4f6fb;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: #0b0d12;
+}
+
+main {
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 28px;
+}
+
+h1, h2, p { margin: 0; }
+
+h1 { font-size: 30px; letter-spacing: -0.03em; }
+
+h2 {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #cbd2e1;
+}
+
+p, small, footer {
+  color: #8f99ad;
+  font-size: 13px;
+}
+
+button {
+  border: 0;
+  border-radius: 12px;
+  background: #e6eaff;
+  color: #11131a;
+  padding: 10px 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+button:hover { filter: brightness(1.05); }
+
+button.danger {
+  background: #3a1f28;
+  color: #ffd8df;
+}
+
+.page-header,
+.section-head,
+.button-row,
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.page-header {
+  margin-bottom: 22px;
+}
+
+.eyebrow {
+  color: #8f99ad;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.card,
+.panel {
+  background: #141821;
+  border: 1px solid #262d3c;
+  border-radius: 18px;
+}
+
+.card {
+  padding: 18px;
+}
+
+.card strong {
+  display: block;
+  font-size: 28px;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.card span {
+  color: #8f99ad;
+  font-size: 12px;
+}
+
+.panel {
+  padding: 18px;
+  margin-bottom: 14px;
+}
+
+.setting-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  background: #0f131c;
+  border: 1px solid #293147;
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.setting-row strong,
+.setting-row small {
+  display: block;
+}
+
+.setting-row strong { font-size: 13px; }
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 16px;
+}
+
+label {
+  color: #cbd2e1;
+  font-size: 12px;
+}
+
+input,
+select {
+  width: 100%;
+  margin-top: 6px;
+  border: 1px solid #30394d;
+  border-radius: 12px;
+  background: #0d1018;
+  color: #f4f6fb;
+  padding: 10px;
+  font: inherit;
+}
+
+input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #0f131c;
+  border: 1px solid #293147;
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.tracker-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.tracker-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  background: #0f131c;
+  border: 1px solid #293147;
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.tracker-row strong,
+.tracker-row span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracker-row span {
+  color: #8f99ad;
+  font-size: 12px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.actions button {
+  padding: 7px 9px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 28px;
+  flex: 0 0 auto;
+}
+
+.switch input { opacity: 0; width: 0; height: 0; }
+
+.switch span {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: #2a3040;
+  border: 1px solid #384052;
+  border-radius: 999px;
+  transition: 0.15s;
+}
+
+.switch span:before {
+  position: absolute;
+  content: "";
+  width: 20px;
+  height: 20px;
+  left: 3px;
+  top: 3px;
+  background: #f4f6fb;
+  border-radius: 50%;
+  transition: 0.15s;
+}
+
+.switch input:checked + span {
+  background: #44d27d;
+  border-color: #44d27d;
+}
+
+.switch input:checked + span:before {
+  transform: translateX(22px);
+}
+
+footer {
+  padding: 6px 2px 30px;
+}
+
+@media (max-width: 800px) {
+  main { padding: 16px; }
+  .cards, .setting-grid, .form-grid { grid-template-columns: 1fr; }
+  .page-header, .section-head { align-items: flex-start; flex-direction: column; }
+}

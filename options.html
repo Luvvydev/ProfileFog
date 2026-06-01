@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>NoiseProfile Options</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">NoiseProfile</p>
+        <h1>Options</h1>
+        <p>Advanced controls, learned tracker review, and backup tools.</p>
+      </div>
+      <div class="header-actions">
+        <button id="refreshState" type="button">Refresh</button>
+        <label class="switch" title="Enable NoiseProfile">
+          <input id="enabled" type="checkbox">
+          <span></span>
+        </label>
+      </div>
+    </header>
+
+    <section class="cards">
+      <div class="card"><strong id="observedCount">0</strong><span>Observed domains</span></div>
+      <div class="card"><strong id="readyCount">0</strong><span>Ready for review</span></div>
+      <div class="card"><strong id="blockedCount">0</strong><span>Blocked</span></div>
+      <div class="card"><strong id="cookieCount">0</strong><span>Cookie mode</span></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <h2>Protection</h2>
+          <p>Keep these conservative unless a site breaks.</p>
+        </div>
+        <button id="saveSettings" type="button">Save</button>
+      </div>
+
+      <div class="setting-grid">
+        <label class="setting-row"><span><strong>Chrome privacy controls</strong><small>Prediction, link auditing, ad topics</small></span><input id="privacyHardening" type="checkbox"></label>
+        <label class="setting-row"><span><strong>Tracker blocker</strong><small>Static third party tracker rules</small></span><input id="trackerBlocker" type="checkbox"></label>
+        <label class="setting-row"><span><strong>Link cleanup</strong><small>Campaign and click ID cleanup</small></span><input id="trackingParameterCleanup" type="checkbox"></label>
+        <label class="setting-row"><span><strong>Learning observer</strong><small>Records repeated third party domains</small></span><input id="trackerLearning" type="checkbox"></label>
+        <label class="setting-row"><span><strong>Learned blocking</strong><small>Promotes mature learned domains</small></span><input id="autoBlockLearnedTrackers" type="checkbox"></label>
+        <label class="setting-row"><span><strong>Cookie block mode</strong><small>Removes cookie, referer, and set-cookie headers</small></span><input id="cookieBlockLearnedTrackers" type="checkbox"></label>
+        <label class="setting-row"><span><strong>Review mode</strong><small>Queue mature domains before block</small></span><input id="learningReviewMode" type="checkbox"></label>
+        <label class="setting-row"><span><strong>Seed tracker data</strong><small>Populate known tracker domains on install/update</small></span><input id="seedKnownTrackers" type="checkbox"></label>
+        <label class="setting-row"><span><strong>Cookie heuristics</strong><small>Use request and response headers as tracker signals</small></span><input id="headerHeuristics" type="checkbox"></label>
+        <label class="setting-row"><span><strong>Breakage protection</strong><small>Allow common auth, captcha, payment, and CDN domains</small></span><input id="breakageProtection" type="checkbox"></label>
+        <label class="setting-row"><span><strong>Recent target rotation</strong><small>Keep generated visits varied</small></span><input id="avoidRecentTargets" type="checkbox"></label>
+        <label class="setting-row"><span><strong>Sensitive tab pause</strong><small>Pause generated activity on banking, checkout, login, mail, payment pages</small></span><input id="pauseOnSensitiveTab" type="checkbox"></label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <h2>Noise behavior</h2>
+          <p>Controls generated browsing and search activity.</p>
+        </div>
+      </div>
+      <div class="form-grid">
+        <label>Mode<select id="mode"><option value="mixed">Mixed</option><option value="search">Search only</option><option value="browse">Browse only</option></select></label>
+        <label>Search engine<select id="searchEngine"><option value="duckduckgo">DuckDuckGo</option><option value="google">Google</option><option value="bing">Bing</option><option value="brave">Brave</option></select></label>
+        <label>Max per hour<input id="maxPerHour" type="number" min="1" max="20"></label>
+        <label>Min delay minutes<input id="minDelayMinutes" type="number" min="1" max="180"></label>
+        <label>Max delay minutes<input id="maxDelayMinutes" type="number" min="1" max="240"></label>
+        <label>Dwell seconds<input id="dwellSeconds" type="number" min="5" max="900"></label>
+        <label class="check-row"><input id="closeTabs" type="checkbox"> Auto close tabs</label>
+        <label class="check-row"><input id="openActive" type="checkbox"> Open active</label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <h2>Learned tracker review</h2>
+          <p>Domains with cookie signals, seed matches, and repeated cross-site presence appear first.</p>
+        </div>
+        <button id="clearLearnedTrackers" class="danger" type="button">Clear learned</button>
+      </div>
+      <div id="learnedList" class="tracker-list"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <h2>Backup</h2>
+          <p>Export or import settings, learned domains, site rules, and pause rules.</p>
+        </div>
+      </div>
+      <div class="button-row">
+        <button id="exportData" type="button">Export JSON</button>
+        <button id="importData" type="button">Import JSON</button>
+        <input id="importFile" type="file" accept="application/json" hidden>
+      </div>
+    </section>
+
+    <footer id="statusLine">Ready.</footer>
+  </main>
+  <script src="options.js"></script>
+</body>
+</html>
