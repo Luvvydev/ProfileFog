@@ -3,7 +3,7 @@ const fields = [
   "dwellSeconds", "closeTabs", "openActive", "pauseOnSensitiveTab", "privacyHardening",
   "trackerBlocker", "trackingParameterCleanup", "trackerLearning", "autoBlockLearnedTrackers",
   "cookieBlockLearnedTrackers", "learningReviewMode", "seedKnownTrackers", "headerHeuristics",
-  "breakageProtection", "avoidRecentTargets"
+  "cnameWatcher", "fingerprintWatcher", "breakageProtection", "avoidRecentTargets"
 ];
 
 let currentState = null;
@@ -17,6 +17,16 @@ async function init() {
     const result = await send({ type: "clearRequestLog" });
     render(result.state);
     setStatus("Request log cleared.");
+  });
+  document.getElementById("clearCnameSuspects").addEventListener("click", async () => {
+    const result = await send({ type: "clearCnameSuspects" });
+    render(result.state);
+    setStatus("CNAME watcher list cleared.");
+  });
+  document.getElementById("clearFingerprintEvents").addEventListener("click", async () => {
+    const result = await send({ type: "clearFingerprintEvents" });
+    render(result.state);
+    setStatus("Fingerprint watcher list cleared.");
   });
   document.getElementById("clearLearnedTrackers").addEventListener("click", async () => {
     const result = await send({ type: "clearLearnedTrackers" });
@@ -52,10 +62,90 @@ function render(state) {
   document.getElementById("blockedCount").textContent = String(learned.blockedCount || 0);
   document.getElementById("cookieCount").textContent = String(learned.cookieBlockedCount || 0);
   document.getElementById("requestLogCount").textContent = String((state.requestLog || []).length);
+  document.getElementById("cnameCount").textContent = String(state.cnameSuspects?.total || 0);
+  document.getElementById("fingerprintCount").textContent = String((state.fingerprintEvents || []).length);
 
   renderLearned(learned.recent || []);
+  renderCnameSuspects(state.cnameSuspects?.recent || []);
+  renderFingerprintEvents(state.fingerprintEvents || [], state.fingerprintEventLimit || 120);
   renderRequestLog(state.requestLog || [], state.requestLogLimit || 300);
 }
+
+
+function renderCnameSuspects(items) {
+  const root = document.getElementById("cnameList");
+  root.innerHTML = "";
+
+  if (!items.length) {
+    const empty = document.createElement("p");
+    empty.textContent = "Possible CNAME cloaking signals will appear here.";
+    root.appendChild(empty);
+    return;
+  }
+
+  for (const item of items.slice(0, 40)) {
+    const row = document.createElement("div");
+    row.className = "watcher-row";
+
+    const main = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = item.host || "unknown";
+
+    const indicators = Object.entries(item.indicators || {})
+      .sort((a, b) => Number(b[1]) - Number(a[1]))
+      .slice(0, 3)
+      .map(([key, count]) => `${key} ×${count}`);
+
+    const meta = document.createElement("span");
+    meta.textContent = [
+      `${item.count || 0} hits`,
+      `${item.firstPartyCount || 0} sites`,
+      indicators.join(", "),
+      formatTime(item.lastSeen)
+    ].filter(Boolean).join(" · ");
+
+    main.append(title, meta);
+    row.appendChild(main);
+    root.appendChild(row);
+  }
+}
+
+function renderFingerprintEvents(items, limit) {
+  const root = document.getElementById("fingerprintList");
+  root.innerHTML = "";
+
+  if (!items.length) {
+    const empty = document.createElement("p");
+    empty.textContent = "Fingerprinting signals will appear here when the watcher is enabled.";
+    root.appendChild(empty);
+    return;
+  }
+
+  const note = document.createElement("p");
+  note.textContent = `Showing ${items.length} of ${limit} retained events.`;
+  root.appendChild(note);
+
+  for (const item of items.slice(0, 60)) {
+    const row = document.createElement("div");
+    row.className = "watcher-row";
+
+    const main = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = item.api || "unknown";
+
+    const meta = document.createElement("span");
+    meta.textContent = [
+      item.domain || "",
+      item.firstParty ? `on ${item.firstParty}` : "",
+      formatTime(item.at)
+    ].filter(Boolean).join(" · ");
+
+    main.append(title, meta);
+    row.appendChild(main);
+    root.appendChild(row);
+  }
+}
+
 
 function renderRequestLog(items, limit) {
   const root = document.getElementById("requestLogList");

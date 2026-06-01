@@ -76,7 +76,7 @@ button.danger {
 
 .cards {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   gap: 12px;
   margin-bottom: 14px;
 }
@@ -136,7 +136,7 @@ button.danger {
 
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   gap: 12px;
   margin-top: 16px;
 }
@@ -312,4 +312,35 @@ footer {
   font-size: 11px !important;
   padding: 5px 8px;
   text-transform: uppercase;
+}
+
+
+.watcher-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.watcher-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  background: #0f131c;
+  border: 1px solid #293147;
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.watcher-row strong,
+.watcher-row span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.watcher-row span {
+  color: #8f99ad;
+  font-size: 12px;
 }

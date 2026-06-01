@@ -28,6 +28,8 @@
       <div class="card"><strong id="blockedCount">0</strong><span>Blocked</span></div>
       <div class="card"><strong id="cookieCount">0</strong><span>Cookie mode</span></div>
       <div class="card"><strong id="requestLogCount">0</strong><span>Request log</span></div>
+      <div class="card"><strong id="cnameCount">0</strong><span>CNAME watch</span></div>
+      <div class="card"><strong id="fingerprintCount">0</strong><span>Fingerprint watch</span></div>
     </section>
 
     <section class="panel">
@@ -49,6 +51,8 @@
         <label class="setting-row"><span><strong>Review mode</strong><small>Queue mature domains before block</small></span><input id="learningReviewMode" type="checkbox"></label>
         <label class="setting-row"><span><strong>Seed tracker data</strong><small>Populate known tracker domains on install/update</small></span><input id="seedKnownTrackers" type="checkbox"></label>
         <label class="setting-row"><span><strong>Cookie heuristics</strong><small>Use request and response headers as tracker signals</small></span><input id="headerHeuristics" type="checkbox"></label>
+        <label class="setting-row"><span><strong>CNAME watcher</strong><small>Flag first party subdomains that look like cloaked trackers</small></span><input id="cnameWatcher" type="checkbox"></label>
+        <label class="setting-row"><span><strong>Fingerprinting watcher</strong><small>Watch canvas, WebGL, and audio fingerprinting calls without blocking</small></span><input id="fingerprintWatcher" type="checkbox"></label>
         <label class="setting-row"><span><strong>Breakage protection</strong><small>Allow common auth, captcha, payment, and CDN domains</small></span><input id="breakageProtection" type="checkbox"></label>
         <label class="setting-row"><span><strong>Recent target rotation</strong><small>Keep generated visits varied</small></span><input id="avoidRecentTargets" type="checkbox"></label>
         <label class="setting-row"><span><strong>Sensitive tab pause</strong><small>Pause generated activity on banking, checkout, login, mail, payment pages</small></span><input id="pauseOnSensitiveTab" type="checkbox"></label>
@@ -83,6 +87,29 @@
         <button id="clearLearnedTrackers" class="danger" type="button">Clear learned</button>
       </div>
       <div id="learnedList" class="tracker-list"></div>
+    </section>
+
+
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <h2>CNAME watcher</h2>
+          <p>Possible first-party cloaked tracker hosts. Watcher only, no automatic blocking.</p>
+        </div>
+        <button id="clearCnameSuspects" class="danger" type="button">Clear CNAME list</button>
+      </div>
+      <div id="cnameList" class="watcher-list"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <h2>Fingerprinting watcher</h2>
+          <p>Recent canvas, WebGL, and audio fingerprinting signals. Watcher only, no spoofing or blocking.</p>
+        </div>
+        <button id="clearFingerprintEvents" class="danger" type="button">Clear fingerprints</button>
+      </div>
+      <div id="fingerprintList" class="watcher-list"></div>
     </section>
 
     <section class="panel">

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "ProfileFog",
-  "version": "1.6.0",
-  "description": "Chrome MV3 extension for controlled browsing noise, tracker learning, seed rules, page controls, and privacy settings.",
+  "version": "1.7.0",
+  "description": "Chrome MV3 privacy extension for controlled browsing noise, tracker learning, CNAME and fingerprinting watchers, link cleanup, and local privacy settings.",
   "permissions": [
     "alarms",
     "storage",
@@ -51,5 +51,27 @@
   "options_ui": {
     "page": "options.html",
     "open_in_tab": true
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "fingerprint_watcher.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "fingerprint_page.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
 }

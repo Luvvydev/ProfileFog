@@ -38,6 +38,9 @@ Classic tools like AdNauseam and TrackMeNot showed that privacy can also come fr
 * Supports cookie block mode for learned trackers.
 * Adds local Chrome privacy controls where Chrome exposes them.
 * Lets you export and import your settings and learned tracker data.
+* Flags possible CNAME cloaking when first-party subdomains look like tracking endpoints.
+* Watches canvas, WebGL, and audio fingerprinting signals without blocking or spoofing.
+* Uses a stronger bundled public suffix map for cleaner domain grouping.
 
 ## Why people might want it
 
@@ -47,3 +50,8 @@ Classic tools like AdNauseam and TrackMeNot showed that privacy can also come fr
 * See which domains keep showing up across sites.
 * Keep quick breakage controls close instead of buried.
 
+
+
+## Version 1.7.0
+
+Added a stronger public suffix map, CNAME cloaking watcher, and fingerprinting watcher. These are watcher-first features: they record suspicious signals for review and logging

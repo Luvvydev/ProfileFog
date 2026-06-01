@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 errors = []
 VALID_RESOURCE_TYPES = {"main_frame", "sub_frame", "stylesheet", "script", "image", "font", "object", "xmlhttprequest", "ping", "csp_report", "media", "websocket", "webtransport", "webbundle", "other"}
-REQUIRED_FILES = ["manifest.json", "service_worker.js", "popup.html", "popup.css", "popup.js", "options.html", "options.css", "options.js", "rules/tracker_rules.json", "rules/cleanup_rules.json"]
+REQUIRED_FILES = ["manifest.json", "service_worker.js", "popup.html", "popup.css", "popup.js", "options.html", "options.css", "options.js", "fingerprint_watcher.js", "fingerprint_page.js", "rules/tracker_rules.json", "rules/cleanup_rules.json", "rules/public_suffixes.json"]
 
 def check_json(path):
     try:
@@ -58,6 +58,12 @@ def check_manifest():
         errors.append("manifest.json: extension name should be ProfileFog")
     if not manifest.get("options_ui", {}).get("page"):
         errors.append("manifest.json: options_ui.page is missing")
+    content_scripts = manifest.get("content_scripts", [])
+    if not any("fingerprint_watcher.js" in item.get("js", []) for item in content_scripts):
+        errors.append("manifest.json: fingerprint_watcher.js content script is missing")
+    resources = manifest.get("web_accessible_resources", [])
+    if not any("fingerprint_page.js" in item.get("resources", []) for item in resources):
+        errors.append("manifest.json: fingerprint_page.js web accessible resource is missing")
 
 
 def check_dnr_resource_types(path):
@@ -93,6 +99,21 @@ def check_request_log_cap():
         errors.append("service_worker.js: request log cap must be 300 or lower")
 
 
+
+def check_watcher_caps():
+    source = (ROOT / "service_worker.js").read_text(encoding="utf-8")
+    caps = {
+        "MAX_REQUEST_LOG_EVENTS": 300,
+        "MAX_FINGERPRINT_EVENTS": 200,
+        "MAX_CNAME_SUSPECTS": 150,
+    }
+    for name, limit in caps.items():
+        match = re.search(rf"{name}\s*=\s*(\d+)", source)
+        if not match:
+            errors.append(f"service_worker.js: {name} is missing")
+        elif int(match.group(1)) > limit:
+            errors.append(f"service_worker.js: {name} must be {limit} or lower")
+
 def check_no_release_junk():
     package = ROOT / "dist" / "ProfileFog.zip"
     if not package.exists():
@@ -111,6 +132,7 @@ def main():
     check_json("manifest.json")
     check_json("rules/tracker_rules.json")
     check_json("rules/cleanup_rules.json")
+    check_json("rules/public_suffixes.json")
     check_dnr_ids("rules/tracker_rules.json")
     check_dnr_ids("rules/cleanup_rules.json")
     check_manifest()
@@ -118,10 +140,13 @@ def main():
     check_dnr_resource_types("rules/cleanup_rules.json")
     check_cleanup_regex_size("rules/cleanup_rules.json")
     check_request_log_cap()
+    check_watcher_caps()
     check_no_release_junk()
     check_node("service_worker.js")
     check_node("popup.js")
     check_node("options.js")
+    check_node("fingerprint_watcher.js")
+    check_node("fingerprint_page.js")
 
     if errors:
         print("Validation failed:")

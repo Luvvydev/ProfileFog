@@ -12,6 +12,8 @@ const MAX_TRACKER_RECENT = 40;
 const MAX_TRACKER_DOMAINS = 30;
 const LEARNED_TRACKERS_KEY = "learnedTrackers";
 const PAGE_TRACKERS_KEY = "pageTrackers";
+const CNAME_SUSPECTS_KEY = "cnameSuspects";
+const FINGERPRINT_EVENTS_KEY = "fingerprintEvents";
 const SITE_RULES_KEY = "siteRules";
 const PAUSED_SITES_KEY = "pausedSites";
 const SEED_VERSION_KEY = "seedTrackerVersion";
@@ -30,6 +32,10 @@ const MAX_SITE_ALLOW_RULES = 90;
 const MAX_PAUSED_SITE_RULES = 40;
 const MAX_BREAKAGE_ALLOW_RULES = 120;
 const MAX_PAGE_TRACKER_PAGES = 35;
+const MAX_CNAME_SUSPECTS = 80;
+const MAX_CNAME_FIRST_PARTIES = 20;
+const MAX_FINGERPRINT_EVENTS = 120;
+const FINGERPRINT_EVENT_DEDUPE_MS = 5 * 60 * 1000;
 const MAX_PAGE_TRACKERS_PER_PAGE = 80;
 const MAX_FIRST_PARTIES_PER_DOMAIN = 30;
 const LEARN_SUSPICIOUS_FIRST_PARTIES = 3;
@@ -45,7 +51,10 @@ let cachedSettingsAt = 0;
 let recentLearnEvents = new Map();
 let pendingRequestLogEvents = [];
 let requestLogFlushTimer = null;
+let recentFingerprintEvents = new Map();
 const OBSERVED_RESOURCE_TYPES = new Set(["sub_frame", "stylesheet", "script", "image", "font", "object", "xmlhttprequest", "ping", "csp_report", "media", "websocket", "webtransport", "webbundle", "other"]);
+const CNAME_HOST_KEYWORDS = ["track", "tracking", "analytics", "metrics", "metric", "telemetry", "event", "events", "pixel", "beacon", "collect", "tag", "tags", "ads", "adserver", "stats", "stat", "log", "logs"];
+const CNAME_PATH_KEYWORDS = ["/collect", "/collection", "/event", "/events", "/pixel", "/beacon", "/track", "/tracking", "/analytics", "/metrics", "/telemetry", "/tag", "/ads", "/stats", "/log"];
 
 const DEFAULT_SETTINGS = {
   enabled: false,
@@ -67,6 +76,8 @@ const DEFAULT_SETTINGS = {
   learningReviewMode: true,
   seedKnownTrackers: true,
   headerHeuristics: true,
+  cnameWatcher: true,
+  fingerprintWatcher: false,
   breakageProtection: true,
   avoidRecentTargets: true,
   topics: {
@@ -302,7 +313,11 @@ const PUBLIC_SUFFIX_RULES = new Set([
   "com.ru", "edu.ru", "gov.ru", "net.ru", "org.ru", "pp.ru",
   "github.io", "gitlab.io", "pages.dev", "web.app", "firebaseapp.com", "appspot.com", "herokuapp.com", "herokuapp.com", "vercel.app", "now.sh", "netlify.app", "netlify.com", "workers.dev", "r2.dev", "pages.dev",
   "cloudfront.net", "azurewebsites.net", "azurestaticapps.net", "blob.core.windows.net", "githubpreview.dev", "githubusercontent.com",
-  "wordpress.com", "wpcomstaging.com", "blogspot.com", "tumblr.com", "medium.com", "substack.com", "readthedocs.io", "pythonanywhere.com", "glitch.me", "repl.co", "replit.app", "surge.sh", "fly.dev", "railway.app", "render.com", "onrender.com"
+  "wordpress.com", "wpcomstaging.com", "blogspot.com", "tumblr.com", "medium.com", "substack.com", "readthedocs.io", "pythonanywhere.com", "glitch.me", "repl.co", "replit.app", "surge.sh", "fly.dev", "railway.app", "render.com", "onrender.com",
+  "myshopify.com", "shopify.dev", "square.site", "weebly.com", "wixsite.com", "editorx.io", "webflow.io", "framer.app", "notion.site", "carrd.co", "softr.app", "bubbleapps.io", "typedream.app",
+  "s3.amazonaws.com", "amazonaws.com", "amplifyapp.com", "elasticbeanstalk.com", "execute-api.us-east-1.amazonaws.com", "execute-api.us-west-2.amazonaws.com",
+  "sharepoint.com", "github.dev", "gitpod.io", "codesandbox.io", "stackblitz.io", "ngrok-free.app", "loca.lt", "trycloudflare.com",
+  "duckdns.org", "ddns.net", "no-ip.org", "zapto.org", "dynu.net", "b-cdn.net", "cloudflarepages.com", "pantheonsite.io", "kinsta.cloud", "wpenginepowered.com"
 ]);
 
 
@@ -347,6 +362,7 @@ if (chrome.webRequest?.onBeforeRequest) {
   chrome.webRequest.onBeforeRequest.addListener(
     (details) => {
       observeThirdPartyRequest(details).catch(() => {});
+      observeCnameCloaking(details).catch(() => {});
     },
     { urls: ["<all_urls>"] }
   );
@@ -358,6 +374,7 @@ if (chrome.webRequest?.onBeforeSendHeaders) {
       (details) => {
         const signals = getRequestHeaderSignals(details);
         if (signals.hasSignals) observeThirdPartyRequest(details, signals).catch(() => {});
+        observeCnameCloaking(details, signals).catch(() => {});
       },
       { urls: ["<all_urls>"] },
       ["requestHeaders", "extraHeaders"]
@@ -368,6 +385,7 @@ if (chrome.webRequest?.onBeforeSendHeaders) {
         (details) => {
           const signals = getRequestHeaderSignals(details);
           if (signals.hasSignals) observeThirdPartyRequest(details, signals).catch(() => {});
+          observeCnameCloaking(details, signals).catch(() => {});
         },
         { urls: ["<all_urls>"] },
         ["requestHeaders"]
@@ -382,6 +400,7 @@ if (chrome.webRequest?.onHeadersReceived) {
       (details) => {
         const signals = getResponseHeaderSignals(details);
         if (signals.hasSignals) observeThirdPartyRequest(details, signals).catch(() => {});
+        observeCnameCloaking(details, signals).catch(() => {});
       },
       { urls: ["<all_urls>"] },
       ["responseHeaders", "extraHeaders"]
@@ -392,6 +411,7 @@ if (chrome.webRequest?.onHeadersReceived) {
         (details) => {
           const signals = getResponseHeaderSignals(details);
           if (signals.hasSignals) observeThirdPartyRequest(details, signals).catch(() => {});
+          observeCnameCloaking(details, signals).catch(() => {});
         },
         { urls: ["<all_urls>"] },
         ["responseHeaders"]
@@ -459,6 +479,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message?.type === "togglePauseCurrentSite") {
         await togglePauseCurrentSite();
         sendResponse({ ok: true, state: await getPublicState() });
+        return;
+      }
+      if (message?.type === "clearCnameSuspects") {
+        await chrome.storage.local.set({ [CNAME_SUSPECTS_KEY]: emptyCnameSuspects() });
+        sendResponse({ ok: true, state: await getPublicState() });
+        return;
+      }
+      if (message?.type === "clearFingerprintEvents") {
+        recentFingerprintEvents = new Map();
+        await chrome.storage.local.set({ [FINGERPRINT_EVENTS_KEY]: [] });
+        sendResponse({ ok: true, state: await getPublicState() });
+        return;
+      }
+      if (message?.type === "getFingerprintWatcherSetting") {
+        const settings = await getCachedSettings();
+        sendResponse({ ok: true, enabled: Boolean(settings.fingerprintWatcher) });
+        return;
+      }
+      if (message?.type === "fingerprintSignal") {
+        await recordFingerprintSignal(message, sender);
+        sendResponse({ ok: true });
         return;
       }
       if (message?.type === "exportData") {
@@ -536,7 +577,7 @@ async function saveSettings(patch) {
 async function getPublicState() {
   const [settings, data, alarm, enabledRulesets, currentPage] = await Promise.all([
     getSettings(),
-    chrome.storage.local.get(["logs", REQUEST_LOGS_KEY, "hourlyRuns", "recentOpened", "trackerStats", LEARNED_TRACKERS_KEY, PAGE_TRACKERS_KEY, SITE_RULES_KEY, PAUSED_SITES_KEY]),
+    chrome.storage.local.get(["logs", REQUEST_LOGS_KEY, CNAME_SUSPECTS_KEY, FINGERPRINT_EVENTS_KEY, "hourlyRuns", "recentOpened", "trackerStats", LEARNED_TRACKERS_KEY, PAGE_TRACKERS_KEY, SITE_RULES_KEY, PAUSED_SITES_KEY]),
     chrome.alarms.get(ALARM_TICK),
     getEnabledRulesets(),
     getCurrentPageInfo()
@@ -549,6 +590,9 @@ async function getPublicState() {
     logs: data.logs || [],
     requestLog: normalizeRequestLog(data[REQUEST_LOGS_KEY]),
     requestLogLimit: MAX_REQUEST_LOG_EVENTS,
+    cnameSuspects: getCnameSuspectSummary(normalizeCnameSuspects(data[CNAME_SUSPECTS_KEY])),
+    fingerprintEvents: normalizeFingerprintEvents(data[FINGERPRINT_EVENTS_KEY]),
+    fingerprintEventLimit: MAX_FINGERPRINT_EVENTS,
     hourlyRuns: data.hourlyRuns || [],
     recentOpened: data.recentOpened || [],
     trackerStats: normalizeTrackerStats(data.trackerStats),
@@ -914,6 +958,201 @@ function extractHostname(rawUrl) {
   }
 }
 
+
+
+
+function emptyCnameSuspects() {
+  return { hosts: {}, lastUpdated: null };
+}
+
+function normalizeCnameSuspects(raw) {
+  const data = { ...emptyCnameSuspects(), ...(raw || {}) };
+  data.hosts = data.hosts && typeof data.hosts === "object" ? data.hosts : {};
+  const hosts = {};
+  for (const [host, item] of Object.entries(data.hosts)) {
+    const cleanHost = normalizeHost(host);
+    if (!isValidRuleDomain(cleanHost)) continue;
+    const normalized = {
+      host: cleanHost,
+      root: normalizeHost(item.root || getRootDomain(cleanHost)),
+      count: Math.max(0, Number(item.count) || 0),
+      firstParties: item.firstParties && typeof item.firstParties === "object" ? item.firstParties : {},
+      indicators: item.indicators && typeof item.indicators === "object" ? item.indicators : {},
+      types: item.types && typeof item.types === "object" ? item.types : {},
+      firstSeen: Number(item.firstSeen) || Date.now(),
+      lastSeen: Number(item.lastSeen) || null,
+      sampleUrl: sanitizeLoggedUrl(item.sampleUrl || "")
+    };
+    normalized.firstParties = Object.fromEntries(
+      Object.entries(normalized.firstParties)
+        .filter(([site]) => isValidRuleDomain(site))
+        .sort((a, b) => Number(b[1]) - Number(a[1]))
+        .slice(0, MAX_CNAME_FIRST_PARTIES)
+    );
+    normalized.firstPartyCount = Object.keys(normalized.firstParties).length;
+    hosts[cleanHost] = normalized;
+  }
+  data.hosts = Object.fromEntries(
+    Object.entries(hosts)
+      .sort((a, b) => Number(b[1].lastSeen || 0) - Number(a[1].lastSeen || 0) || Number(b[1].count || 0) - Number(a[1].count || 0))
+      .slice(0, MAX_CNAME_SUSPECTS)
+  );
+  return data;
+}
+
+function getCnameSuspectSummary(data) {
+  const hosts = Object.values(data.hosts || {})
+    .sort((a, b) => Number(b.lastSeen || 0) - Number(a.lastSeen || 0) || Number(b.count || 0) - Number(a.count || 0))
+    .slice(0, MAX_CNAME_SUSPECTS);
+  return {
+    total: hosts.length,
+    recent: hosts.slice(0, 40),
+    lastUpdated: data.lastUpdated || null
+  };
+}
+
+async function observeCnameCloaking(details, signals = {}) {
+  const settings = await getCachedSettings();
+  if (!settings.cnameWatcher) return;
+  if (!details || details.type === "main_frame") return;
+  if (!OBSERVED_RESOURCE_TYPES.has(details.type)) return;
+
+  const requestHost = extractHostname(details.url);
+  const firstPartyHost = getFirstPartyHost(details);
+  if (!requestHost || !firstPartyHost || requestHost === "unknown" || firstPartyHost === "unknown") return;
+  if (requestHost === firstPartyHost) return;
+  if (isSensitiveHost(requestHost) || isSensitiveHost(firstPartyHost)) return;
+
+  const firstPartyRoot = getRootDomain(firstPartyHost);
+  const requestRoot = getRootDomain(requestHost);
+  if (!firstPartyRoot || !requestRoot || firstPartyRoot !== requestRoot) return;
+
+  const indicator = getCnameCloakingIndicator(requestHost, details.url || "", signals);
+  if (!indicator) return;
+
+  const now = Date.now();
+  const data = normalizeCnameSuspects((await chrome.storage.local.get([CNAME_SUSPECTS_KEY]))[CNAME_SUSPECTS_KEY]);
+  const item = data.hosts[requestHost] || {
+    host: requestHost,
+    root: requestRoot,
+    count: 0,
+    firstParties: {},
+    indicators: {},
+    types: {},
+    firstSeen: now,
+    lastSeen: now,
+    sampleUrl: ""
+  };
+
+  item.count += 1;
+  item.lastSeen = now;
+  item.sampleUrl = details.url || item.sampleUrl || "";
+  item.firstParties[firstPartyRoot] = now;
+  item.indicators[indicator] = (item.indicators[indicator] || 0) + 1;
+  item.types[details.type || "other"] = (item.types[details.type || "other"] || 0) + 1;
+  data.hosts[requestHost] = item;
+  data.lastUpdated = now;
+
+  await chrome.storage.local.set({ [CNAME_SUSPECTS_KEY]: normalizeCnameSuspects(data) });
+
+  queueRequestLog({
+    source: "cname",
+    action: "cname_watch",
+    reason: indicator,
+    domain: requestHost,
+    firstParty: firstPartyRoot,
+    type: details.type,
+    url: details.url,
+    signals: { cookie: signals.cookieHeader, referer: signals.refererHeader, setCookie: signals.setCookieHeader }
+  });
+}
+
+function getCnameCloakingIndicator(host, rawUrl, signals = {}) {
+  const cleanHost = normalizeHost(host);
+  const labels = cleanHost.split(".");
+  const leftLabels = labels.slice(0, Math.max(0, labels.length - getRootDomain(cleanHost).split(".").length));
+  const leftSide = leftLabels.join(".");
+  const lowerUrl = String(rawUrl || "").toLowerCase();
+
+  for (const keyword of CNAME_HOST_KEYWORDS) {
+    if (leftSide === keyword || leftSide.includes(`${keyword}.`) || leftSide.includes(`-${keyword}`) || leftSide.includes(`${keyword}-`) || leftSide.includes(keyword)) {
+      return `host:${keyword}`;
+    }
+  }
+
+  for (const keyword of CNAME_PATH_KEYWORDS) {
+    if (lowerUrl.includes(keyword)) return `path:${keyword.replace("/", "")}`;
+  }
+
+  if (signals.cookieHeader && signals.refererHeader) return "headers:cookie_referer";
+  if (signals.setCookieHeader) return "headers:set_cookie";
+  return "";
+}
+
+function normalizeFingerprintEvents(raw) {
+  const events = Array.isArray(raw) ? raw : [];
+  return events
+    .map(item => ({
+      at: Number(item?.at) || Date.now(),
+      api: String(item?.api || "unknown").slice(0, 80),
+      domain: normalizeHost(item?.domain || ""),
+      firstParty: normalizeHost(item?.firstParty || ""),
+      url: sanitizeLoggedUrl(item?.url || ""),
+      frameUrl: sanitizeLoggedUrl(item?.frameUrl || "")
+    }))
+    .filter(item => item.domain)
+    .sort((a, b) => Number(b.at) - Number(a.at))
+    .slice(0, MAX_FINGERPRINT_EVENTS);
+}
+
+async function recordFingerprintSignal(message, sender) {
+  const settings = await getCachedSettings();
+  if (!settings.fingerprintWatcher) return;
+
+  const frameUrl = String(message?.url || sender?.url || "");
+  const tabUrl = String(sender?.tab?.url || frameUrl || "");
+  const host = extractHostname(frameUrl || tabUrl);
+  const firstPartyHost = extractHostname(tabUrl || frameUrl);
+  if (!host || host === "unknown") return;
+  if (isSensitiveHost(host) || isSensitiveHost(firstPartyHost)) return;
+
+  const api = String(message?.api || "unknown").slice(0, 80);
+  const root = getRootDomain(firstPartyHost || host);
+  const now = Date.now();
+  const tabId = sender?.tab?.id ?? "no-tab";
+  const key = `${tabId}|${root}|${host}|${api}`;
+
+  for (const [eventKey, at] of recentFingerprintEvents.entries()) {
+    if (now - at > FINGERPRINT_EVENT_DEDUPE_MS || recentFingerprintEvents.size > 500) recentFingerprintEvents.delete(eventKey);
+  }
+
+  const lastSeen = recentFingerprintEvents.get(key);
+  if (lastSeen && now - lastSeen < FINGERPRINT_EVENT_DEDUPE_MS) return;
+  recentFingerprintEvents.set(key, now);
+
+  const event = {
+    at: now,
+    api,
+    domain: host,
+    firstParty: root || getRootDomain(host),
+    url: tabUrl || frameUrl,
+    frameUrl
+  };
+
+  const data = await chrome.storage.local.get([FINGERPRINT_EVENTS_KEY]);
+  const events = [event].concat(normalizeFingerprintEvents(data[FINGERPRINT_EVENTS_KEY])).slice(0, MAX_FINGERPRINT_EVENTS);
+  await chrome.storage.local.set({ [FINGERPRINT_EVENTS_KEY]: events });
+
+  queueRequestLog({
+    source: "fingerprint",
+    action: "fingerprint_watch",
+    reason: api,
+    domain: host,
+    firstParty: event.firstParty,
+    type: "script",
+    url: frameUrl || tabUrl
+  });
+}
 
 
 async function observeThirdPartyRequest(details, signals = {}) {
@@ -1593,7 +1832,7 @@ async function applySeedTrackerData(settings = null) {
 
 
 async function buildExportData() {
-  const data = await chrome.storage.local.get(["settings", LEARNED_TRACKERS_KEY, SITE_RULES_KEY, PAUSED_SITES_KEY, "trackerStats", SEED_VERSION_KEY]);
+  const data = await chrome.storage.local.get(["settings", LEARNED_TRACKERS_KEY, SITE_RULES_KEY, PAUSED_SITES_KEY, CNAME_SUSPECTS_KEY, FINGERPRINT_EVENTS_KEY, "trackerStats", SEED_VERSION_KEY]);
   return {
     name: "ProfileFog export",
     version: 1,
@@ -1602,6 +1841,8 @@ async function buildExportData() {
     learnedTrackers: normalizeLearnedTrackerData(data[LEARNED_TRACKERS_KEY]),
     siteRules: normalizeSiteRules(data[SITE_RULES_KEY]),
     pausedSites: normalizePausedSites(data[PAUSED_SITES_KEY]),
+    cnameSuspects: normalizeCnameSuspects(data[CNAME_SUSPECTS_KEY]),
+    fingerprintEvents: normalizeFingerprintEvents(data[FINGERPRINT_EVENTS_KEY]),
     trackerStats: normalizeTrackerStats(data.trackerStats),
     seedTrackerVersion: Number(data[SEED_VERSION_KEY]) || 0
   };
@@ -1614,6 +1855,8 @@ async function importExtensionData(payload) {
   if (incoming.learnedTrackers) next[LEARNED_TRACKERS_KEY] = normalizeLearnedTrackerData(incoming.learnedTrackers);
   if (incoming.siteRules) next[SITE_RULES_KEY] = normalizeSiteRules(incoming.siteRules);
   if (incoming.pausedSites) next[PAUSED_SITES_KEY] = normalizePausedSites(incoming.pausedSites);
+  if (incoming.cnameSuspects) next[CNAME_SUSPECTS_KEY] = normalizeCnameSuspects(incoming.cnameSuspects);
+  if (incoming.fingerprintEvents) next[FINGERPRINT_EVENTS_KEY] = normalizeFingerprintEvents(incoming.fingerprintEvents);
   if (incoming.trackerStats) next.trackerStats = normalizeTrackerStats(incoming.trackerStats);
   if (incoming.seedTrackerVersion) next[SEED_VERSION_KEY] = Number(incoming.seedTrackerVersion) || 0;
   await chrome.storage.local.set(next);
