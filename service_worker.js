@@ -59,7 +59,7 @@ const CNAME_PATH_KEYWORDS = ["/collect", "/collection", "/event", "/events", "/p
 const DEFAULT_SETTINGS = {
   enabled: false,
   mode: "mixed",
-  searchEngine: "duckduckgo",
+  searchEngine: "google",
   maxPerHour: 4,
   minDelayMinutes: 8,
   maxDelayMinutes: 22,
@@ -78,6 +78,8 @@ const DEFAULT_SETTINGS = {
   headerHeuristics: true,
   cnameWatcher: true,
   fingerprintWatcher: false,
+  redHerringNoise: true,
+  privacySafeExport: true,
   breakageProtection: true,
   avoidRecentTargets: true,
   topics: {
@@ -102,6 +104,26 @@ const SEARCH_ENGINES = {
   bing: "https://www.bing.com/search?q=",
   brave: "https://search.brave.com/search?q="
 };
+
+
+const RED_HERRING_QUERIES = [
+  "best drawer organizer sizes", "desk mat material comparison", "plant watering reminder ideas", "laundry symbol guide",
+  "quiet fan for bedroom", "ceramic mug care", "notebook paper sizes", "shoe storage bench ideas",
+  "led desk lamp warm light", "microfiber towel uses", "reusable grocery bag materials", "basic sewing kit items",
+  "window curtain measurement guide", "small bookshelf styling", "bike tire pump types", "portable umbrella size comparison",
+  "how to label storage bins", "calendar blocking templates", "meal container sizes", "kitchen sponge alternatives",
+  "packing cube sizes", "beginner houseplant soil mix", "desk cable clips", "water bottle lid types"
+];
+
+const FINGERPRINT_API_ALLOWLIST = new Set([
+  "canvas.toDataURL", "canvas.toBlob", "canvas.getImageData", "canvas.measureText", "canvas.convertToBlob",
+  "webgl.getParameter", "webgl2.getParameter",
+  "audio.getChannelData", "audio.getFloatFrequencyData", "audio.getByteFrequencyData",
+  "media.enumerateDevices", "intl.resolvedOptions", "date.getTimezoneOffset",
+  "screen.width", "screen.height", "screen.availWidth", "screen.availHeight", "screen.colorDepth", "screen.pixelDepth",
+  "navigator.hardwareConcurrency", "navigator.deviceMemory", "navigator.platform", "navigator.language",
+  "navigator.languages", "navigator.userAgent", "navigator.webdriver"
+]);
 
 const TOPIC_QUERIES = {
   home: [
@@ -554,6 +576,10 @@ function normalizeSettings(raw) {
   merged.learningReviewMode = merged.learningReviewMode !== false;
   merged.seedKnownTrackers = merged.seedKnownTrackers !== false;
   merged.headerHeuristics = merged.headerHeuristics !== false;
+  merged.cnameWatcher = merged.cnameWatcher !== false;
+  merged.fingerprintWatcher = Boolean(merged.fingerprintWatcher);
+  merged.redHerringNoise = merged.redHerringNoise !== false;
+  merged.privacySafeExport = merged.privacySafeExport !== false;
   merged.breakageProtection = merged.breakageProtection !== false;
   merged.avoidRecentTargets = merged.avoidRecentTargets !== false;
   if (!SEARCH_ENGINES[merged.searchEngine]) merged.searchEngine = DEFAULT_SETTINGS.searchEngine;
@@ -700,23 +726,26 @@ async function getRecentUrlSet() {
 }
 
 function pickSearch(topic, settings) {
-  const queries = TOPIC_QUERIES[topic] || [];
-  const query = mutateQuery(choice(queries) || "interesting articles");
-  const base = SEARCH_ENGINES[settings.searchEngine] || SEARCH_ENGINES.duckduckgo;
+  const decoy = Boolean(settings.redHerringNoise) && Math.random() < 0.18;
+  const queries = decoy ? RED_HERRING_QUERIES : (TOPIC_QUERIES[topic] || []);
+  const query = mutateQuery(choice(queries) || "interesting articles", decoy);
+  const base = SEARCH_ENGINES[settings.searchEngine] || SEARCH_ENGINES.google;
   return {
     kind: "search",
-    topic,
-    label: `Search: ${query}`,
+    topic: decoy ? "red_herring" : topic,
+    label: decoy ? `Red herring: ${query}` : `Search: ${query}`,
     url: `${base}${encodeURIComponent(query)}`
   };
 }
 
-function mutateQuery(query) {
+function mutateQuery(query, decoy = false) {
   const suffixes = ["", "", "", " guide", " ideas", " comparison", " tips", " 2026", " for beginners"];
+  const decoySuffixes = ["", "", " sizes", " checklist", " examples", " near me", " comparison", " beginner guide"];
   const prefix = ["", "", "", "best ", "how to choose ", "cheap ", "simple "];
+  const decoyPrefix = ["", "", "best ", "simple ", "how to organize ", "how to clean ", "what size "];
   let q = query;
-  if (Math.random() < 0.25) q = choice(prefix) + q;
-  if (Math.random() < 0.35) q = q + choice(suffixes);
+  if (Math.random() < (decoy ? 0.4 : 0.25)) q = choice(decoy ? decoyPrefix : prefix) + q;
+  if (Math.random() < (decoy ? 0.45 : 0.35)) q = q + choice(decoy ? decoySuffixes : suffixes);
   return q.replace(/\s+/g, " ").trim();
 }
 
@@ -789,8 +818,7 @@ function normalizeRequestLogEntry(raw) {
 function sanitizeLoggedUrl(rawUrl) {
   try {
     const url = new URL(rawUrl);
-    url.hash = "";
-    return `${url.origin}${url.pathname}`.slice(0, 220);
+    return url.origin.slice(0, 220);
   } catch (_) {
     return "";
   }
@@ -900,12 +928,12 @@ async function recordRuleMatch(info) {
   if (action === "blocked") {
     current.totalBlocked += 1;
     current.byDomain[domain] = (current.byDomain[domain] || 0) + 1;
-    current.recent.unshift({ at: Date.now(), type: "blocked", domain, url: requestUrl });
+    current.recent.unshift({ at: Date.now(), type: "blocked", domain, url: sanitizeLoggedUrl(requestUrl) });
   }
 
   if (action === "cleaned") {
     current.totalCleaned += 1;
-    current.recent.unshift({ at: Date.now(), type: "cleaned", domain, url: requestUrl });
+    current.recent.unshift({ at: Date.now(), type: "cleaned", domain, url: sanitizeLoggedUrl(requestUrl) });
   }
 
   current.recent = current.recent.slice(0, MAX_TRACKER_RECENT);
@@ -938,7 +966,12 @@ function normalizeTrackerStats(raw) {
   stats.totalBlocked = Number(stats.totalBlocked) || 0;
   stats.totalCleaned = Number(stats.totalCleaned) || 0;
   stats.byDomain = stats.byDomain && typeof stats.byDomain === "object" ? stats.byDomain : {};
-  stats.recent = Array.isArray(stats.recent) ? stats.recent.slice(0, MAX_TRACKER_RECENT) : [];
+  stats.recent = Array.isArray(stats.recent) ? stats.recent.slice(0, MAX_TRACKER_RECENT).map(item => ({
+    at: Number(item?.at) || Date.now(),
+    type: String(item?.type || "").slice(0, 32),
+    domain: normalizeHost(item?.domain || ""),
+    url: sanitizeLoggedUrl(item?.url || "")
+  })).filter(item => item.domain) : [];
   return stats;
 }
 
@@ -1046,7 +1079,7 @@ async function observeCnameCloaking(details, signals = {}) {
 
   item.count += 1;
   item.lastSeen = now;
-  item.sampleUrl = details.url || item.sampleUrl || "";
+  item.sampleUrl = sanitizeLoggedUrl(details.url || item.sampleUrl || "");
   item.firstParties[firstPartyRoot] = now;
   item.indicators[indicator] = (item.indicators[indicator] || 0) + 1;
   item.types[details.type || "other"] = (item.types[details.type || "other"] || 0) + 1;
@@ -1117,6 +1150,7 @@ async function recordFingerprintSignal(message, sender) {
   if (isSensitiveHost(host) || isSensitiveHost(firstPartyHost)) return;
 
   const api = String(message?.api || "unknown").slice(0, 80);
+  if (!FINGERPRINT_API_ALLOWLIST.has(api)) return;
   const root = getRootDomain(firstPartyHost || host);
   const now = Date.now();
   const tabId = sender?.tab?.id ?? "no-tab";
@@ -1212,7 +1246,7 @@ async function observeThirdPartyRequest(details, signals = {}) {
   item.requestCount += 1;
   item.lastSeen = now;
   item.sampleType = details.type;
-  item.sampleUrl = details.url || item.sampleUrl || "";
+  item.sampleUrl = sanitizeLoggedUrl(details.url || item.sampleUrl || "");
   item.heuristics = normalizeHeuristics(item.heuristics);
   item.heuristics.thirdPartyRequests += 1;
   if (signals.cookieHeader) item.heuristics.thirdPartyCookieRequests += 1;
@@ -1280,7 +1314,7 @@ async function recordPageTracker(firstPartyRoot, requestHost, details, signals =
   const item = page.domains[requestHost] || { domain: requestHost, count: 0, types: {}, firstSeen: now, lastSeen: now, sampleUrl: "" };
   item.count += 1;
   item.lastSeen = now;
-  item.sampleUrl = details.url || item.sampleUrl || "";
+  item.sampleUrl = sanitizeLoggedUrl(details.url || item.sampleUrl || "");
   item.types[details.type || "other"] = (item.types[details.type || "other"] || 0) + 1;
   item.signals = item.signals || {};
   if (signals.cookieHeader) item.signals.cookieHeader = (item.signals.cookieHeader || 0) + 1;
@@ -1444,7 +1478,9 @@ function normalizeLearnedTrackerItem(raw, domain) {
   item.heuristics = normalizeHeuristics(item.heuristics);
   item.heuristicScore = calculateHeuristicScore(item.heuristics, item.firstPartyCount, item.requestCount);
   item.seeded = Boolean(item.seeded);
-  item.category = String(item.category || "");
+  item.sampleType = String(item.sampleType || "other").slice(0, 32);
+  item.sampleUrl = sanitizeLoggedUrl(item.sampleUrl || "");
+  item.category = String(item.category || "").slice(0, 64);
   return item;
 }
 
@@ -1833,19 +1869,55 @@ async function applySeedTrackerData(settings = null) {
 
 async function buildExportData() {
   const data = await chrome.storage.local.get(["settings", LEARNED_TRACKERS_KEY, SITE_RULES_KEY, PAUSED_SITES_KEY, CNAME_SUSPECTS_KEY, FINGERPRINT_EVENTS_KEY, "trackerStats", SEED_VERSION_KEY]);
+  const settings = normalizeSettings(data.settings || {});
+  const learnedTrackers = normalizeLearnedTrackerData(data[LEARNED_TRACKERS_KEY]);
+  const cnameSuspects = normalizeCnameSuspects(data[CNAME_SUSPECTS_KEY]);
+  const fingerprintEvents = normalizeFingerprintEvents(data[FINGERPRINT_EVENTS_KEY]);
+  const trackerStats = normalizeTrackerStats(data.trackerStats);
   return {
     name: "ProfileFog export",
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
-    settings: normalizeSettings(data.settings || {}),
-    learnedTrackers: normalizeLearnedTrackerData(data[LEARNED_TRACKERS_KEY]),
+    privacySafeExport: settings.privacySafeExport,
+    settings,
+    learnedTrackers: settings.privacySafeExport ? stripLearnedTrackerExportUrls(learnedTrackers) : learnedTrackers,
     siteRules: normalizeSiteRules(data[SITE_RULES_KEY]),
     pausedSites: normalizePausedSites(data[PAUSED_SITES_KEY]),
-    cnameSuspects: normalizeCnameSuspects(data[CNAME_SUSPECTS_KEY]),
-    fingerprintEvents: normalizeFingerprintEvents(data[FINGERPRINT_EVENTS_KEY]),
-    trackerStats: normalizeTrackerStats(data.trackerStats),
+    cnameSuspects: settings.privacySafeExport ? stripCnameExportUrls(cnameSuspects) : cnameSuspects,
+    fingerprintEvents: settings.privacySafeExport ? stripFingerprintExportUrls(fingerprintEvents) : fingerprintEvents,
+    trackerStats: settings.privacySafeExport ? stripTrackerStatsExportUrls(trackerStats) : trackerStats,
     seedTrackerVersion: Number(data[SEED_VERSION_KEY]) || 0
   };
+}
+
+function stripCnameExportUrls(data) {
+  const clean = normalizeCnameSuspects(data);
+  for (const item of Object.values(clean.hosts || {})) {
+    item.sampleUrl = "";
+  }
+  return clean;
+}
+
+function stripLearnedTrackerExportUrls(data) {
+  const clean = normalizeLearnedTrackerData(data);
+  for (const item of Object.values(clean.domains || {})) {
+    item.sampleUrl = "";
+  }
+  return clean;
+}
+
+function stripTrackerStatsExportUrls(data) {
+  const clean = normalizeTrackerStats(data);
+  clean.recent = clean.recent.map(item => ({ ...item, url: "" }));
+  return clean;
+}
+
+function stripFingerprintExportUrls(items) {
+  return normalizeFingerprintEvents(items).map(item => ({
+    ...item,
+    url: "",
+    frameUrl: ""
+  }));
 }
 
 async function importExtensionData(payload) {
@@ -1890,6 +1962,11 @@ function trimPageDomains(page) {
       .filter(([domain]) => isValidRuleDomain(domain))
       .sort((a, b) => Number(b[1].lastSeen || 0) - Number(a[1].lastSeen || 0))
       .slice(0, MAX_PAGE_TRACKERS_PER_PAGE)
+      .map(([domain, item]) => [domain, {
+        ...item,
+        domain,
+        sampleUrl: sanitizeLoggedUrl(item?.sampleUrl || "")
+      }])
   );
   return { ...page, domains };
 }

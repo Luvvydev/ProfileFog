@@ -6,7 +6,7 @@
 
 **Blur the profile they think they have on you.**
 
-ProfileFog helps blur low confidence ad and tracking profiles by combining controlled browsing noise, tracker blocking, link cleanup, learned tracker controls, and local Chrome privacy settings.
+ProfileFog helps blur low confidence ad and tracking profiles by combining controlled browsing noise, red herring searches, tracker blocking, link cleanup, learned tracker controls, and local Chrome privacy settings.
 
 Ad networks and trackers build profiles by watching patterns. ProfileFog changes the pattern. It adds controlled browsing noise, reduces tracker reach, cleans tracking tags from links, and gives you simple controls when a site needs a lighter touch.
 
@@ -30,6 +30,7 @@ Classic tools like AdNauseam and TrackMeNot showed that privacy can also come fr
 ## What ProfileFog does
 
 * Adds controlled search and browsing noise
+* Blends occasional neutral red herring searches into generated activity
 * Blocks common tracker requests with Chrome Manifest V3 rules.
 * Cleans tracking tags like campaign IDs from links.
 * Learns which tracker domains repeatedly follow you across unrelated sites.
@@ -39,7 +40,9 @@ Classic tools like AdNauseam and TrackMeNot showed that privacy can also come fr
 * Adds local Chrome privacy controls where Chrome exposes them.
 * Lets you export and import your settings and learned tracker data.
 * Flags possible CNAME cloaking when first-party subdomains look like tracking endpoints.
-* Watches canvas, WebGL, and audio fingerprinting signals without blocking or spoofing.
+* Watches canvas, WebGL, audio, screen, device, locale, and media fingerprinting signals without blocking or spoofing.
+* Strips watched page URLs and tracker sample URLs from safe exports by default.
+* Stores request diagnostic URLs at site origin level instead of keeping page paths.
 * Uses a stronger bundled public suffix map for cleaner domain grouping.
 
 ## Why people might want it
@@ -51,6 +54,14 @@ Classic tools like AdNauseam and TrackMeNot showed that privacy can also come fr
 * Keep quick breakage controls close instead of buried.
 
 
+
+## Version 1.8.1
+
+Tightened privacy-safe storage and exports. Request diagnostics now keep only site origins instead of page paths, learned tracker sample URLs are normalized, and safe exports also strip learned tracker and tracker stats sample URLs. This reduces the chance that a shared export or local diagnostic log exposes browsing history.
+
+## Version 1.8.0
+
+Added red herring noise, broader fingerprint watching, API validation for fingerprint signals, and safe exports that strip watched page URLs by default. These remain conservative privacy features, not spoofing or malware-style evasion.
 
 ## Version 1.7.0
 

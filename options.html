@@ -52,7 +52,9 @@
         <label class="setting-row"><span><strong>Seed tracker data</strong><small>Populate known tracker domains on install/update</small></span><input id="seedKnownTrackers" type="checkbox"></label>
         <label class="setting-row"><span><strong>Cookie heuristics</strong><small>Use request and response headers as tracker signals</small></span><input id="headerHeuristics" type="checkbox"></label>
         <label class="setting-row"><span><strong>CNAME watcher</strong><small>Flag first party subdomains that look like cloaked trackers</small></span><input id="cnameWatcher" type="checkbox"></label>
-        <label class="setting-row"><span><strong>Fingerprinting watcher</strong><small>Watch canvas, WebGL, and audio fingerprinting calls without blocking</small></span><input id="fingerprintWatcher" type="checkbox"></label>
+        <label class="setting-row"><span><strong>Fingerprinting watcher</strong><small>Watch canvas, WebGL, audio, device, screen, locale, and media fingerprinting calls without blocking</small></span><input id="fingerprintWatcher" type="checkbox"></label>
+        <label class="setting-row"><span><strong>Red herring noise</strong><small>Blend occasional neutral decoy searches into generated activity</small></span><input id="redHerringNoise" type="checkbox"></label>
+        <label class="setting-row"><span><strong>Safe exports</strong><small>Remove watched page URLs and tracker sample URLs from exported data</small></span><input id="privacySafeExport" type="checkbox"></label>
         <label class="setting-row"><span><strong>Breakage protection</strong><small>Allow common auth, captcha, payment, and CDN domains</small></span><input id="breakageProtection" type="checkbox"></label>
         <label class="setting-row"><span><strong>Recent target rotation</strong><small>Keep generated visits varied</small></span><input id="avoidRecentTargets" type="checkbox"></label>
         <label class="setting-row"><span><strong>Sensitive tab pause</strong><small>Pause generated activity on banking, checkout, login, mail, payment pages</small></span><input id="pauseOnSensitiveTab" type="checkbox"></label>
@@ -68,7 +70,7 @@
       </div>
       <div class="form-grid">
         <label>Mode<select id="mode"><option value="mixed">Mixed</option><option value="search">Search only</option><option value="browse">Browse only</option></select></label>
-        <label>Search engine<select id="searchEngine"><option value="duckduckgo">DuckDuckGo</option><option value="google">Google</option><option value="bing">Bing</option><option value="brave">Brave</option></select></label>
+        <label>Search engine<select id="searchEngine"><option value="google">Google</option><option value="duckduckgo">DuckDuckGo</option><option value="bing">Bing</option><option value="brave">Brave</option></select></label>
         <label>Max per hour<input id="maxPerHour" type="number" min="1" max="20"></label>
         <label>Min delay minutes<input id="minDelayMinutes" type="number" min="1" max="180"></label>
         <label>Max delay minutes<input id="maxDelayMinutes" type="number" min="1" max="240"></label>
@@ -105,7 +107,7 @@
       <div class="section-head">
         <div>
           <h2>Fingerprinting watcher</h2>
-          <p>Recent canvas, WebGL, and audio fingerprinting signals. Watcher only, no spoofing or blocking.</p>
+          <p>Recent canvas, WebGL, audio, screen, device, locale, and media fingerprinting signals. Watcher only, no spoofing or blocking.</p>
         </div>
         <button id="clearFingerprintEvents" class="danger" type="button">Clear fingerprints</button>
       </div>
@@ -127,7 +129,7 @@
       <div class="section-head">
         <div>
           <h2>Backup</h2>
-          <p>Export or import settings, learned domains, site rules, and pause rules.</p>
+          <p>Export or import settings, learned domains, site rules, and pause rules. Safe exports strip watched page URLs and tracker sample URLs by default.</p>
         </div>
       </div>
       <div class="button-row">

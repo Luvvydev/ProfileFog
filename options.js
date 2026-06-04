@@ -3,7 +3,7 @@ const fields = [
   "dwellSeconds", "closeTabs", "openActive", "pauseOnSensitiveTab", "privacyHardening",
   "trackerBlocker", "trackingParameterCleanup", "trackerLearning", "autoBlockLearnedTrackers",
   "cookieBlockLearnedTrackers", "learningReviewMode", "seedKnownTrackers", "headerHeuristics",
-  "cnameWatcher", "fingerprintWatcher", "breakageProtection", "avoidRecentTargets"
+  "cnameWatcher", "fingerprintWatcher", "redHerringNoise", "privacySafeExport", "breakageProtection", "avoidRecentTargets"
 ];
 
 let currentState = null;

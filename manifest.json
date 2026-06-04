@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "ProfileFog",
-  "version": "1.7.0",
-  "description": "Chrome MV3 privacy extension for controlled browsing noise, tracker learning, CNAME and fingerprinting watchers, link cleanup, and local privacy settings.",
+  "version": "1.8.2",
+  "description": "Chrome MV3 privacy extension for controlled browsing noise, red herring searches, tracker learning, safer local logs, CNAME and fingerprinting watchers, link cleanup, and local privacy settings.",
   "permissions": [
     "alarms",
     "storage",

@@ -14,6 +14,7 @@ cd "$ROOT"
 zip -r "$OUT_FILE" \
   manifest.json \
   service_worker.js \
+  fingerprint_watcher.js fingerprint_page.js \
   popup.html popup.css popup.js \
   options.html options.css options.js \
   README.md \

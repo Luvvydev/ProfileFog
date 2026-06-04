@@ -29,6 +29,21 @@
     } catch (_) {}
   };
 
+  const wrapGetter = (target, prop, api) => {
+    try {
+      if (!target) return;
+      const descriptor = Object.getOwnPropertyDescriptor(target, prop);
+      if (!descriptor || typeof descriptor.get !== "function" || descriptor.get.__profileFogWrapped) return;
+      const originalGet = descriptor.get;
+      const wrappedGet = function() {
+        try { emit(api); } catch (_) {}
+        return originalGet.call(this);
+      };
+      Object.defineProperty(wrappedGet, "__profileFogWrapped", { value: true });
+      Object.defineProperty(target, prop, { ...descriptor, get: wrappedGet });
+    } catch (_) {}
+  };
+
   const webglParamFilter = (args) => {
     const value = Number(args?.[0]);
     return [
@@ -44,6 +59,7 @@
   wrapMethod(window.HTMLCanvasElement && HTMLCanvasElement.prototype, "toDataURL", "canvas.toDataURL");
   wrapMethod(window.HTMLCanvasElement && HTMLCanvasElement.prototype, "toBlob", "canvas.toBlob");
   wrapMethod(window.CanvasRenderingContext2D && CanvasRenderingContext2D.prototype, "getImageData", "canvas.getImageData");
+  wrapMethod(window.CanvasRenderingContext2D && CanvasRenderingContext2D.prototype, "measureText", "canvas.measureText");
   wrapMethod(window.OffscreenCanvas && OffscreenCanvas.prototype, "convertToBlob", "canvas.convertToBlob");
 
   wrapMethod(window.WebGLRenderingContext && WebGLRenderingContext.prototype, "getParameter", "webgl.getParameter", webglParamFilter);
@@ -52,4 +68,18 @@
   wrapMethod(window.AudioBuffer && AudioBuffer.prototype, "getChannelData", "audio.getChannelData");
   wrapMethod(window.AnalyserNode && AnalyserNode.prototype, "getFloatFrequencyData", "audio.getFloatFrequencyData");
   wrapMethod(window.AnalyserNode && AnalyserNode.prototype, "getByteFrequencyData", "audio.getByteFrequencyData");
+
+  wrapMethod(window.navigator && navigator.mediaDevices, "enumerateDevices", "media.enumerateDevices");
+  wrapMethod(window.Intl && Intl.DateTimeFormat && Intl.DateTimeFormat.prototype, "resolvedOptions", "intl.resolvedOptions");
+  wrapMethod(window.Date && Date.prototype, "getTimezoneOffset", "date.getTimezoneOffset");
+
+  const screenProto = window.Screen && Screen.prototype;
+  ["width", "height", "availWidth", "availHeight", "colorDepth", "pixelDepth"].forEach(prop => {
+    wrapGetter(screenProto, prop, `screen.${prop}`);
+  });
+
+  const navigatorProto = window.Navigator && Navigator.prototype;
+  ["hardwareConcurrency", "deviceMemory", "platform", "language", "languages", "userAgent", "webdriver"].forEach(prop => {
+    wrapGetter(navigatorProto, prop, `navigator.${prop}`);
+  });
 })();
