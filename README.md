@@ -5,11 +5,6 @@
 </p>
 
 <p align="center">
-  Clean popup UI with one click controls, tracker stats, and quick access to settings.
-</p>
-
-
-<p align="center">
   <img src="icons/Logo.png" alt="ProfileFog" width="100%">
 </p>
 
