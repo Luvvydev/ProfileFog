@@ -1,12 +1,19 @@
+## Screenshot
+
+<p align="center">
+  <img src="icons/profilefog-popup.png" alt="ProfileFog main dashboard UI" width="380" />
+</p>
+
+<p align="center">
+  Clean popup UI with one click controls, tracker stats, and quick access to settings.
+</p>
+
+
 <p align="center">
   <img src="icons/Logo.png" alt="ProfileFog" width="100%">
 </p>
 
 # ProfileFog
-
-**Blur the profile they think they have on you.**
-
-ProfileFog helps blur low confidence ad and tracking profiles by combining controlled browsing noise, red herring searches, tracker blocking, link cleanup, learned tracker controls, and local Chrome privacy settings.
 
 Ad networks and trackers build profiles by watching patterns. ProfileFog changes the pattern. It adds controlled browsing noise, reduces tracker reach, cleans tracking tags from links, and gives you simple controls when a site needs a lighter touch.
 
