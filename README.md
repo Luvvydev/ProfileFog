@@ -10,7 +10,7 @@
 
 # ProfileFog
 
-Ad networks and trackers build profiles by watching patterns. ProfileFog changes the pattern. It adds controlled browsing noise, reduces tracker reach, cleans tracking tags from links, and gives you simple controls when a site needs a lighter touch.
+Ad networks and trackers build profiles by watching patterns. ProfileFog changes the pattern.
 
 ## Quick install
 
@@ -31,7 +31,7 @@ Classic tools like AdNauseam and TrackMeNot showed that privacy can also come fr
 
 ## What ProfileFog does
 
-* Adds controlled search and browsing noise
+* Adds controlled search and browsing ad poison.
 * Blends occasional neutral red herring searches into generated activity
 * Blocks common tracker requests with Chrome Manifest V3 rules.
 * Cleans tracking tags like campaign IDs from links.
@@ -53,7 +53,6 @@ Classic tools like AdNauseam and TrackMeNot showed that privacy can also come fr
 * Reduce third party tracking while browsing.
 * Clean ugly tracking links automatically.
 * See which domains keep showing up across sites.
-* Keep quick breakage controls close instead of buried.
 
 
 
