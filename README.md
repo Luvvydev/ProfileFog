@@ -56,6 +56,10 @@ Classic tools like AdNauseam and TrackMeNot showed that privacy can also come fr
 
 
 
+## Version 1.9.0
+
+Added an opt-in URL-filtered history cleaner with scheduled cleanup and a subtle popup Clean button. The cleaner only removes local Chrome history entries whose URLs match the configured filter list, respects the exclusion list, and shows cleanup stats in settings. This is local Chrome cleanup only, not device-wide, account-wide, ISP, DNS, cache, or synced-history erasure.
+
 ## Version 1.8.1
 
 Tightened privacy-safe storage and exports. Request diagnostics now keep only site origins instead of page paths, learned tracker sample URLs are normalized, and safe exports also strip learned tracker and tracker stats sample URLs. This reduces the chance that a shared export or local diagnostic log exposes browsing history.
