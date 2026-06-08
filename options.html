@@ -30,6 +30,7 @@
       <div class="card"><strong id="requestLogCount">0</strong><span>Request log</span></div>
       <div class="card"><strong id="cnameCount">0</strong><span>CNAME watch</span></div>
       <div class="card"><strong id="fingerprintCount">0</strong><span>Fingerprint watch</span></div>
+      <div class="card"><strong id="historyCleanerCount">0</strong><span>History deleted</span></div>
     </section>
 
     <section class="panel">
@@ -43,6 +44,7 @@
 
       <div class="setting-grid">
         <label class="setting-row"><span><strong>Chrome privacy controls</strong><small>Prediction, link auditing, ad topics</small></span><input id="privacyHardening" type="checkbox"></label>
+        <label class="setting-row"><span><strong>History cleaner</strong><small>Deletes local Chrome history entries matching your saved URL filters</small></span><input id="historyCleaner" type="checkbox"></label>
         <label class="setting-row"><span><strong>Tracker blocker</strong><small>Static third party tracker rules</small></span><input id="trackerBlocker" type="checkbox"></label>
         <label class="setting-row"><span><strong>Link cleanup</strong><small>Campaign and click ID cleanup</small></span><input id="trackingParameterCleanup" type="checkbox"></label>
         <label class="setting-row"><span><strong>Learning observer</strong><small>Records repeated third party domains</small></span><input id="trackerLearning" type="checkbox"></label>
@@ -59,6 +61,24 @@
         <label class="setting-row"><span><strong>Recent target rotation</strong><small>Keep generated visits varied</small></span><input id="avoidRecentTargets" type="checkbox"></label>
         <label class="setting-row"><span><strong>Sensitive tab pause</strong><small>Pause generated activity on banking, checkout, login, mail, payment pages</small></span><input id="pauseOnSensitiveTab" type="checkbox"></label>
       </div>
+    </section>
+
+
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <h2>History cleaner</h2>
+          <p>Opt in local cleanup for URLs matching your saved filter list. Save changes before relying on scheduled cleanup.</p>
+        </div>
+        <button id="runHistoryCleaner" class="danger" type="button">Clean now</button>
+      </div>
+      <div class="history-grid">
+        <label>Clean every minutes<input id="historyCleanIntervalMinutes" type="number" min="15" max="1440"></label>
+        <label>Look back days<input id="historyCleanLookbackDays" type="number" min="1" max="90"></label>
+        <label class="wide-field">Delete when URL contains<textarea id="historyCleanKeywords" rows="8" spellcheck="false"></textarea></label>
+        <label class="wide-field">Never delete when URL contains<textarea id="historyCleanExclusions" rows="5" spellcheck="false"></textarea></label>
+      </div>
+      <p id="historyCleanerStatus" class="panel-note">History cleaner has not run yet.</p>
     </section>
 
     <section class="panel">

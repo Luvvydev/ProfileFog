@@ -29,6 +29,13 @@ function bindStaticEvents() {
     });
   });
 
+  bindClick("cleanHistoryNow", async () => {
+    await withBusy("cleanHistoryNow", async () => {
+      const result = await send({ type: "runHistoryCleaner" });
+      render(result.state);
+    });
+  });
+
   bindClick("pauseSite", async () => {
     const result = await send({ type: "togglePauseCurrentSite" });
     render(result.state);
@@ -78,9 +85,22 @@ function render(state) {
 
   setValue("enabled", settings.enabled);
   renderStatus(state);
+  renderHistoryCleanerButton(state);
   renderCurrentPage(state);
   renderTrackerStats(state);
   renderLearnedTrackers(state);
+}
+
+function renderHistoryCleanerButton(state) {
+  const button = document.getElementById("cleanHistoryNow");
+  if (!button) return;
+
+  const settings = state.settings || {};
+  const enabled = Boolean(settings.historyCleaner);
+  button.disabled = !enabled;
+  button.title = enabled
+    ? "Clean local Chrome history entries matching your URL filter list"
+    : "Enable History cleaner in settings first";
 }
 
 function renderStatus(state) {

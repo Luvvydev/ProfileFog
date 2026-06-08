@@ -1,7 +1,9 @@
 const ALARM_TICK = "noiseTick";
+const HISTORY_CLEAN_ALARM = "historyCleanTick";
 const CLOSE_PREFIX = "closeTab:";
 const MAX_LOGS = 80;
 const REQUEST_LOGS_KEY = "requestLog";
+const HISTORY_CLEAN_STATS_KEY = "historyCleanerStats";
 const MAX_REQUEST_LOG_EVENTS = 300;
 const REQUEST_LOG_FLUSH_MS = 2000;
 const MAX_REQUEST_LOG_BUFFER = 20;
@@ -56,6 +58,15 @@ const OBSERVED_RESOURCE_TYPES = new Set(["sub_frame", "stylesheet", "script", "i
 const CNAME_HOST_KEYWORDS = ["track", "tracking", "analytics", "metrics", "metric", "telemetry", "event", "events", "pixel", "beacon", "collect", "tag", "tags", "ads", "adserver", "stats", "stat", "log", "logs"];
 const CNAME_PATH_KEYWORDS = ["/collect", "/collection", "/event", "/events", "/pixel", "/beacon", "/track", "/tracking", "/analytics", "/metrics", "/telemetry", "/tag", "/ads", "/stats", "/log"];
 
+const DEFAULT_HISTORY_CLEAN_KEYWORDS = [
+  "pornhub", "xvideos", "xnxx", "redtube", "youporn", "onlyfans", "nsfw", "xxx",
+  "torrent", "keygen", "crack download", "warez", "piratebay"
+];
+
+const DEFAULT_HISTORY_CLEAN_EXCLUSIONS = [
+  "profilefog", "chrome.google.com", "chromewebstore.google.com", "chessdrills.net"
+];
+
 const DEFAULT_SETTINGS = {
   enabled: false,
   mode: "mixed",
@@ -68,6 +79,11 @@ const DEFAULT_SETTINGS = {
   openActive: false,
   pauseOnSensitiveTab: true,
   privacyHardening: true,
+  historyCleaner: false,
+  historyCleanIntervalMinutes: 60,
+  historyCleanLookbackDays: 7,
+  historyCleanKeywords: DEFAULT_HISTORY_CLEAN_KEYWORDS.join("\n"),
+  historyCleanExclusions: DEFAULT_HISTORY_CLEAN_EXCLUSIONS.join("\n"),
   trackerBlocker: true,
   trackingParameterCleanup: true,
   trackerLearning: true,
@@ -350,6 +366,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   await applySeedTrackerData(settings);
   await syncLearnedTrackerRules(settings);
   await setIconState(settings.enabled);
+  await scheduleHistoryCleaner(settings);
   if (settings.enabled) await scheduleNext(settings);
 });
 
@@ -360,12 +377,17 @@ chrome.runtime.onStartup.addListener(async () => {
   await applySeedTrackerData(settings);
   await syncLearnedTrackerRules(settings);
   await setIconState(settings.enabled);
+  await scheduleHistoryCleaner(settings);
   if (settings.enabled) await scheduleNext(settings);
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM_TICK) {
     runTick();
+    return;
+  }
+  if (alarm.name === HISTORY_CLEAN_ALARM) {
+    runHistoryCleaner();
     return;
   }
   if (alarm.name.startsWith(CLOSE_PREFIX)) {
@@ -454,6 +476,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await applyPrivacyControls(merged);
         await applyTrackerControls(merged);
         await syncLearnedTrackerRules(merged);
+        await scheduleHistoryCleaner(merged);
         if (merged.enabled) await scheduleNext(merged);
         else await stopAll();
         await setIconState(merged.enabled);
@@ -462,6 +485,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       if (message?.type === "runNow") {
         await runTick({ manual: true });
+        sendResponse({ ok: true, state: await getPublicState() });
+        return;
+      }
+      if (message?.type === "runHistoryCleaner") {
+        await runHistoryCleaner({ manual: true });
         sendResponse({ ok: true, state: await getPublicState() });
         return;
       }
@@ -568,6 +596,11 @@ function normalizeSettings(raw) {
   merged.maxDelayMinutes = clamp(Number(merged.maxDelayMinutes) || DEFAULT_SETTINGS.maxDelayMinutes, merged.minDelayMinutes, 240);
   merged.dwellSeconds = clamp(Number(merged.dwellSeconds) || DEFAULT_SETTINGS.dwellSeconds, 5, 900);
   merged.privacyHardening = Boolean(merged.privacyHardening);
+  merged.historyCleaner = Boolean(merged.historyCleaner);
+  merged.historyCleanIntervalMinutes = clamp(Number(merged.historyCleanIntervalMinutes) || DEFAULT_SETTINGS.historyCleanIntervalMinutes, 15, 1440);
+  merged.historyCleanLookbackDays = clamp(Number(merged.historyCleanLookbackDays) || DEFAULT_SETTINGS.historyCleanLookbackDays, 1, 90);
+  merged.historyCleanKeywords = normalizeHistoryCleanerText(merged.historyCleanKeywords, DEFAULT_HISTORY_CLEAN_KEYWORDS);
+  merged.historyCleanExclusions = normalizeHistoryCleanerText(merged.historyCleanExclusions, DEFAULT_HISTORY_CLEAN_EXCLUSIONS);
   merged.trackerBlocker = merged.trackerBlocker !== false;
   merged.trackingParameterCleanup = merged.trackingParameterCleanup !== false;
   merged.trackerLearning = merged.trackerLearning !== false;
@@ -603,7 +636,7 @@ async function saveSettings(patch) {
 async function getPublicState() {
   const [settings, data, alarm, enabledRulesets, currentPage] = await Promise.all([
     getSettings(),
-    chrome.storage.local.get(["logs", REQUEST_LOGS_KEY, CNAME_SUSPECTS_KEY, FINGERPRINT_EVENTS_KEY, "hourlyRuns", "recentOpened", "trackerStats", LEARNED_TRACKERS_KEY, PAGE_TRACKERS_KEY, SITE_RULES_KEY, PAUSED_SITES_KEY]),
+    chrome.storage.local.get(["logs", REQUEST_LOGS_KEY, HISTORY_CLEAN_STATS_KEY, CNAME_SUSPECTS_KEY, FINGERPRINT_EVENTS_KEY, "hourlyRuns", "recentOpened", "trackerStats", LEARNED_TRACKERS_KEY, PAGE_TRACKERS_KEY, SITE_RULES_KEY, PAUSED_SITES_KEY]),
     chrome.alarms.get(ALARM_TICK),
     getEnabledRulesets(),
     getCurrentPageInfo()
@@ -616,6 +649,7 @@ async function getPublicState() {
     logs: data.logs || [],
     requestLog: normalizeRequestLog(data[REQUEST_LOGS_KEY]),
     requestLogLimit: MAX_REQUEST_LOG_EVENTS,
+    historyCleanerStats: normalizeHistoryCleanerStats(data[HISTORY_CLEAN_STATS_KEY]),
     cnameSuspects: getCnameSuspectSummary(normalizeCnameSuspects(data[CNAME_SUSPECTS_KEY])),
     fingerprintEvents: normalizeFingerprintEvents(data[FINGERPRINT_EVENTS_KEY]),
     fingerprintEventLimit: MAX_FINGERPRINT_EVENTS,
@@ -632,6 +666,118 @@ async function getPublicState() {
     breakageAllowCount: BREAKAGE_ALLOW_DOMAINS.length,
     nextRunAt: alarm?.scheduledTime || null
   };
+}
+
+
+async function scheduleHistoryCleaner(settings = null) {
+  const s = settings || await getSettings();
+  await chrome.alarms.clear(HISTORY_CLEAN_ALARM);
+  if (!s.historyCleaner) return;
+  await chrome.alarms.create(HISTORY_CLEAN_ALARM, {
+    when: Date.now() + 60 * 1000,
+    periodInMinutes: s.historyCleanIntervalMinutes
+  });
+}
+
+async function runHistoryCleaner(options = {}) {
+  const settings = await getSettings();
+  if (!settings.historyCleaner && !options.manual) return;
+
+  const stats = normalizeHistoryCleanerStats((await chrome.storage.local.get([HISTORY_CLEAN_STATS_KEY]))[HISTORY_CLEAN_STATS_KEY]);
+  stats.lastRunAt = Date.now();
+  stats.lastDeleted = 0;
+  stats.lastError = "";
+
+  try {
+    if (!chrome.history?.search || !chrome.history?.deleteUrl) {
+      stats.lastError = "Chrome history permission or API unavailable.";
+      await chrome.storage.local.set({ [HISTORY_CLEAN_STATS_KEY]: stats });
+      return;
+    }
+
+    const terms = parseHistoryCleanerTerms(settings.historyCleanKeywords);
+    const exclusions = parseHistoryCleanerTerms(settings.historyCleanExclusions);
+    if (!terms.length) {
+      stats.lastError = "No cleanup keywords configured.";
+      await chrome.storage.local.set({ [HISTORY_CLEAN_STATS_KEY]: stats });
+      return;
+    }
+
+    const startTime = Date.now() - settings.historyCleanLookbackDays * 24 * 60 * 60 * 1000;
+    const matches = new Map();
+
+    for (const term of terms) {
+      const results = await searchHistory({ text: term, startTime, maxResults: 1000 });
+      for (const item of results || []) {
+        if (shouldDeleteHistoryItem(item, terms, exclusions)) matches.set(item.url, item);
+      }
+    }
+
+    for (const url of matches.keys()) {
+      await deleteHistoryUrl(url);
+      stats.lastDeleted += 1;
+    }
+
+    stats.totalDeleted += stats.lastDeleted;
+  } catch (err) {
+    stats.lastError = String(err?.message || err).slice(0, 160);
+  }
+
+  await chrome.storage.local.set({ [HISTORY_CLEAN_STATS_KEY]: stats });
+  if (stats.lastDeleted) {
+    await addLog({ type: "history", label: "History cleaner", detail: `Deleted ${stats.lastDeleted} matching URLs` });
+  }
+}
+
+function shouldDeleteHistoryItem(item, terms, exclusions) {
+  const url = String(item?.url || "");
+  if (!url || url.startsWith("chrome://") || url.startsWith("chrome-extension://")) return false;
+
+  const haystack = url.toLowerCase();
+  if (exclusions.some(term => haystack.includes(term))) return false;
+  return terms.some(term => haystack.includes(term));
+}
+
+function searchHistory(query) {
+  return new Promise((resolve, reject) => {
+    chrome.history.search(query, results => {
+      const error = chrome.runtime.lastError;
+      if (error) reject(new Error(error.message));
+      else resolve(results || []);
+    });
+  });
+}
+
+function deleteHistoryUrl(url) {
+  return new Promise((resolve, reject) => {
+    chrome.history.deleteUrl({ url }, () => {
+      const error = chrome.runtime.lastError;
+      if (error) reject(new Error(error.message));
+      else resolve();
+    });
+  });
+}
+
+function normalizeHistoryCleanerStats(raw) {
+  const data = raw && typeof raw === "object" ? raw : {};
+  return {
+    lastRunAt: Number(data.lastRunAt) || null,
+    lastDeleted: Number(data.lastDeleted) || 0,
+    totalDeleted: Number(data.totalDeleted) || 0,
+    lastError: String(data.lastError || "").slice(0, 160)
+  };
+}
+
+function normalizeHistoryCleanerText(value, fallback) {
+  const terms = parseHistoryCleanerTerms(value).length ? parseHistoryCleanerTerms(value) : fallback;
+  return terms.slice(0, 120).map(term => term.slice(0, 80)).join("\n");
+}
+
+function parseHistoryCleanerTerms(value) {
+  return Array.from(new Set(String(value || "")
+    .split(/[\n,]+/)
+    .map(term => term.trim().toLowerCase())
+    .filter(term => term.length >= 3)));
 }
 
 async function scheduleNext(settings = null) {
@@ -1868,7 +2014,7 @@ async function applySeedTrackerData(settings = null) {
 
 
 async function buildExportData() {
-  const data = await chrome.storage.local.get(["settings", LEARNED_TRACKERS_KEY, SITE_RULES_KEY, PAUSED_SITES_KEY, CNAME_SUSPECTS_KEY, FINGERPRINT_EVENTS_KEY, "trackerStats", SEED_VERSION_KEY]);
+  const data = await chrome.storage.local.get(["settings", LEARNED_TRACKERS_KEY, SITE_RULES_KEY, PAUSED_SITES_KEY, CNAME_SUSPECTS_KEY, FINGERPRINT_EVENTS_KEY, HISTORY_CLEAN_STATS_KEY, "trackerStats", SEED_VERSION_KEY]);
   const settings = normalizeSettings(data.settings || {});
   const learnedTrackers = normalizeLearnedTrackerData(data[LEARNED_TRACKERS_KEY]);
   const cnameSuspects = normalizeCnameSuspects(data[CNAME_SUSPECTS_KEY]);
@@ -1885,6 +2031,7 @@ async function buildExportData() {
     pausedSites: normalizePausedSites(data[PAUSED_SITES_KEY]),
     cnameSuspects: settings.privacySafeExport ? stripCnameExportUrls(cnameSuspects) : cnameSuspects,
     fingerprintEvents: settings.privacySafeExport ? stripFingerprintExportUrls(fingerprintEvents) : fingerprintEvents,
+    historyCleanerStats: normalizeHistoryCleanerStats(data[HISTORY_CLEAN_STATS_KEY]),
     trackerStats: settings.privacySafeExport ? stripTrackerStatsExportUrls(trackerStats) : trackerStats,
     seedTrackerVersion: Number(data[SEED_VERSION_KEY]) || 0
   };
@@ -1929,12 +2076,15 @@ async function importExtensionData(payload) {
   if (incoming.pausedSites) next[PAUSED_SITES_KEY] = normalizePausedSites(incoming.pausedSites);
   if (incoming.cnameSuspects) next[CNAME_SUSPECTS_KEY] = normalizeCnameSuspects(incoming.cnameSuspects);
   if (incoming.fingerprintEvents) next[FINGERPRINT_EVENTS_KEY] = normalizeFingerprintEvents(incoming.fingerprintEvents);
+  if (incoming.historyCleanerStats) next[HISTORY_CLEAN_STATS_KEY] = normalizeHistoryCleanerStats(incoming.historyCleanerStats);
   if (incoming.trackerStats) next.trackerStats = normalizeTrackerStats(incoming.trackerStats);
   if (incoming.seedTrackerVersion) next[SEED_VERSION_KEY] = Number(incoming.seedTrackerVersion) || 0;
   await chrome.storage.local.set(next);
   cachedSettings = null;
   cachedSettingsAt = 0;
-  await syncLearnedTrackerRules(await getSettings());
+  const settings = await getSettings();
+  await syncLearnedTrackerRules(settings);
+  await scheduleHistoryCleaner(settings);
 }
 
 

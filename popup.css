@@ -191,13 +191,38 @@ body.is-on .status-dot {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 210px;
+  max-width: 180px;
+}
+
+.status-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+}
+
+.primary-action,
+.secondary-action {
+  min-width: 58px;
+  padding: 9px 12px;
 }
 
 .primary-action {
-  min-width: 58px;
-  padding: 9px 12px;
   background: #e9eeff;
+}
+
+.secondary-action {
+  min-width: 0;
+  padding: 8px 10px;
+  background: rgba(24, 32, 50, 0.82);
+  color: #aeb9cd;
+  border: 1px solid #2a3650;
+  font-size: 11px;
+}
+
+.secondary-action:hover:not(:disabled) {
+  color: #dce5f8;
+  background: #1a2336;
 }
 
 .metric-row {

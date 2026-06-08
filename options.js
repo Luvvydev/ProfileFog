@@ -1,6 +1,7 @@
 const fields = [
   "enabled", "mode", "searchEngine", "maxPerHour", "minDelayMinutes", "maxDelayMinutes",
   "dwellSeconds", "closeTabs", "openActive", "pauseOnSensitiveTab", "privacyHardening",
+  "historyCleaner", "historyCleanIntervalMinutes", "historyCleanLookbackDays", "historyCleanKeywords", "historyCleanExclusions",
   "trackerBlocker", "trackingParameterCleanup", "trackerLearning", "autoBlockLearnedTrackers",
   "cookieBlockLearnedTrackers", "learningReviewMode", "seedKnownTrackers", "headerHeuristics",
   "cnameWatcher", "fingerprintWatcher", "redHerringNoise", "privacySafeExport", "breakageProtection", "avoidRecentTargets"
@@ -13,6 +14,12 @@ init();
 async function init() {
   document.getElementById("saveSettings").addEventListener("click", saveSettings);
   document.getElementById("refreshState").addEventListener("click", refresh);
+  document.getElementById("runHistoryCleaner").addEventListener("click", async () => {
+    await send({ type: "saveSettings", patch: collectPatch() });
+    const result = await send({ type: "runHistoryCleaner" });
+    render(result.state);
+    setStatus("History cleaner ran.");
+  });
   document.getElementById("clearRequestLog").addEventListener("click", async () => {
     const result = await send({ type: "clearRequestLog" });
     render(result.state);
@@ -64,11 +71,27 @@ function render(state) {
   document.getElementById("requestLogCount").textContent = String((state.requestLog || []).length);
   document.getElementById("cnameCount").textContent = String(state.cnameSuspects?.total || 0);
   document.getElementById("fingerprintCount").textContent = String((state.fingerprintEvents || []).length);
+  document.getElementById("historyCleanerCount").textContent = String(state.historyCleanerStats?.totalDeleted || 0);
 
   renderLearned(learned.recent || []);
   renderCnameSuspects(state.cnameSuspects?.recent || []);
   renderFingerprintEvents(state.fingerprintEvents || [], state.fingerprintEventLimit || 120);
+  renderHistoryCleanerStats(state.historyCleanerStats || {});
   renderRequestLog(state.requestLog || [], state.requestLogLimit || 300);
+}
+
+function renderHistoryCleanerStats(stats) {
+  const root = document.getElementById("historyCleanerStatus");
+  if (!root) return;
+  if (stats.lastError) {
+    root.textContent = `Last run: ${formatTime(stats.lastRunAt)}. Error: ${stats.lastError}`;
+    return;
+  }
+  if (!stats.lastRunAt) {
+    root.textContent = "History cleaner has not run yet.";
+    return;
+  }
+  root.textContent = `Last run: ${formatTime(stats.lastRunAt)}. Deleted ${stats.lastDeleted || 0} this run, ${stats.totalDeleted || 0} total.`;
 }
 
 
