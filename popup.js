@@ -95,12 +95,8 @@ function renderHistoryCleanerButton(state) {
   const button = document.getElementById("cleanHistoryNow");
   if (!button) return;
 
-  const settings = state.settings || {};
-  const enabled = Boolean(settings.historyCleaner);
-  button.disabled = !enabled;
-  button.title = enabled
-    ? "Clean local Chrome history entries matching your URL filter list"
-    : "Enable History cleaner in settings first";
+  button.disabled = false;
+  button.title = "Run the history cleaner once now using your saved URL filter list";
 }
 
 function renderStatus(state) {

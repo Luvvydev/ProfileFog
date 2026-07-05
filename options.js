@@ -20,6 +20,7 @@ async function init() {
     render(result.state);
     setStatus("History cleaner ran.");
   });
+  bindHistoryCleanerToggleAlias();
   document.getElementById("clearRequestLog").addEventListener("click", async () => {
     const result = await send({ type: "clearRequestLog" });
     render(result.state);
@@ -62,6 +63,7 @@ function render(state) {
   currentState = state;
   const settings = state.settings || {};
   for (const id of fields) setValue(id, settings[id]);
+  setValue("historyCleanerPanelToggle", settings.historyCleaner);
 
   const learned = state.learnedTrackers || {};
   document.getElementById("observedCount").textContent = String(learned.totalObservedDomains || 0);
@@ -78,6 +80,20 @@ function render(state) {
   renderFingerprintEvents(state.fingerprintEvents || [], state.fingerprintEventLimit || 120);
   renderHistoryCleanerStats(state.historyCleanerStats || {});
   renderRequestLog(state.requestLog || [], state.requestLogLimit || 300);
+}
+
+function bindHistoryCleanerToggleAlias() {
+  const mainToggle = document.getElementById("historyCleaner");
+  const panelToggle = document.getElementById("historyCleanerPanelToggle");
+  if (!mainToggle || !panelToggle) return;
+
+  panelToggle.addEventListener("change", () => {
+    mainToggle.checked = panelToggle.checked;
+    setStatus("Unsaved changes.");
+  });
+  mainToggle.addEventListener("change", () => {
+    panelToggle.checked = mainToggle.checked;
+  });
 }
 
 function renderHistoryCleanerStats(stats) {
